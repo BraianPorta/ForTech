@@ -6,9 +6,9 @@ from typing import Callable
 from uuid import uuid4
 
 from data import PROGRESS_COLUMNS
+from ui.shared.functions import RESISTANCE_CANDIDATES
 
-CATALOG = {"R": (330, 680, 1000, 1500, 2200, 3300),
-           "C": (100, 220, 330, 470, 560, 1000)}
+CATALOG = {"R": RESISTANCE_CANDIDATES}
 
 
 @dataclass
@@ -19,12 +19,14 @@ class GameSession:
     la misión. Reiniciar crea una sesión nueva y descarta la no completada.
     """
 
-    challenge_id: str
+    difficulty: int
     device: str
     clock: Callable[[], float] = field(default=perf_counter, repr=False)
     changes: dict = field(default_factory=lambda: {"R": 0, "C": 0})
     attempts: int = 0
     finished: float | None = None
+    paused_at: float | None = field(default=None, init=False)
+    paused_duration: float = field(default=0.0, init=False)
     identifier: str = field(default_factory=lambda: str(uuid4()))
 
     def __post_init__(self):
@@ -32,7 +34,19 @@ class GameSession:
 
     @property
     def elapsed(self) -> float:
-        return max(0.0, (self.clock() if self.finished is None else self.finished) - self.started)
+        stop = self.finished
+        if stop is None:
+            stop = self.paused_at if self.paused_at is not None else self.clock()
+        return max(0.0, stop - self.started - self.paused_duration)
+
+    def pause(self) -> None:
+        if self.finished is None and self.paused_at is None:
+            self.paused_at = self.clock()
+
+    def resume(self) -> None:
+        if self.finished is None and self.paused_at is not None:
+            self.paused_duration += self.clock() - self.paused_at
+            self.paused_at = None
 
     @property
     def total_changes(self) -> int:
@@ -50,9 +64,9 @@ class GameSession:
     def complete(self) -> dict:
         """Congela el tiempo y construye la fila de estadísticas de esta partida."""
         if self.finished is None:
-            self.finished = self.clock()
+            self.finished = self.paused_at if self.paused_at is not None else self.clock()
         return dict(zip(PROGRESS_COLUMNS, [
             self.identifier, datetime.now(timezone.utc).isoformat(),
-            self.challenge_id, self.device, round(self.elapsed, 3),
+            self.difficulty, self.device, round(self.elapsed, 3),
             self.changes["R"], self.changes["C"], self.total_changes, self.attempts,
         ]))

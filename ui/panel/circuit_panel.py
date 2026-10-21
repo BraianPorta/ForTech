@@ -24,7 +24,7 @@ class CircuitPanel(QFrame):
         layout.setSpacing(12)
 
         stage_header = QHBoxLayout()
-        stage_header.addWidget(label("EL TALLER", "eyebrow"))
+        stage_header.addWidget(label("RED DE RESISTENCIAS", "eyebrow"))
         stage_header.addStretch()
         self.level_path = label("", "hint")
         stage_header.addWidget(self.level_path)

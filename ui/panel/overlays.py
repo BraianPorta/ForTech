@@ -51,12 +51,11 @@ class ComponentMenu(QFrame):
         self.motion = WidgetMotion(self)
         self.hide()
 
-    def open_above(self, kind, current, anchor):
-        self.kind, self.values = kind, CATALOG[kind]
-        unit = "Ω" if kind == "R" else "µF"
-        self.title.setText("R1 · Resistencia" if kind == "R" else "C1 · Condensador")
+    def open_above(self, component_id, current, anchor):
+        self.component_id, self.values = component_id, CATALOG["R"]
+        self.title.setText(f"{component_id} · Resistencia")
         for button, value in zip(self.buttons, self.values):
-            button.setText(f"{value:g} {unit}")
+            button.setText(f"{value:g} Ω")
             button.setChecked(current == value)
         self.adjustSize()
         x = max(10, min(anchor.center().x() - self.width() // 2,
@@ -74,7 +73,7 @@ class ComponentMenu(QFrame):
 
     def choose(self, value):
         self.dismiss()
-        self.chosen.emit(self.kind, float(value))
+        self.chosen.emit(self.component_id, float(value))
 
 
 class VictoryOverlay(QWidget):

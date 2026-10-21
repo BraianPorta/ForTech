@@ -4,7 +4,8 @@ from PySide6.QtCore import QEasingCurve, QObject, QPointF, QRectF, QRunnable, QP
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QFrame, QGraphicsObject, QGraphicsScene, QGraphicsView, QWidget
 
-from data import Challenge, simulate
+from data import Challenge
+from ui.shared.functions import simulate
 from ui.shared.style import BG
 
 class GameBackdrop(QWidget):
@@ -34,16 +35,17 @@ class ComponentItem(QGraphicsObject):
 
     clicked = Signal(str)
 
-    def __init__(self, kind: str, value: float):
+    def __init__(self, identifier: str, value: float, label: str):
         super().__init__()
-        self.kind, self.value = kind, value
+        self.identifier, self.value, self.label = identifier, value, label
+        self.display_value = value
         self.active = False
         self.hovering = False
         self.setAcceptHoverEvents(True)
         self.animations = None
         self.setAcceptedMouseButtons(Qt.MouseButton.LeftButton)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setToolTip("Seleccionar y editar " + ("resistencia" if kind == "R" else "condensador"))
+        self.setToolTip("Seleccionar y editar resistencia")
 
     def boundingRect(self) -> QRectF:
         return QRectF(-82, -55, 164, 115)
@@ -51,7 +53,7 @@ class ComponentItem(QGraphicsObject):
     def paint(self, painter: QPainter, _option, _widget=None):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         ink = QColor("#66518a")
-        accent = QColor("#a6dfcf" if self.kind == "R" else "#ffc18f")
+        accent = QColor("#a6dfcf")
         rect = QRectF(-77, -49, 154, 101)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor("#b2b6af"))
@@ -65,27 +67,24 @@ class ComponentItem(QGraphicsObject):
         painter.setPen(QPen(QColor("#ffffff"), 3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
         painter.drawLine(QPointF(-56, -40), QPointF(42, -40))
         painter.setPen(QPen(ink, 3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-        if self.kind == "R":
-            path = QPainterPath(QPointF(-51, -4))
-            path.lineTo(-38, -4)
-            for i in range(8):
-                path.lineTo(-30 + i * 8, -14 if i % 2 == 0 else 6)
-            path.lineTo(38, -4)
-            path.lineTo(51, -4)
-            painter.drawPath(path)
-        else:
-            painter.drawLine(QPointF(-48, -4), QPointF(-12, -4))
-            painter.drawLine(QPointF(-12, -17), QPointF(-12, 9))
-            painter.drawLine(QPointF(12, -17), QPointF(12, 9))
-            painter.drawLine(QPointF(12, -4), QPointF(48, -4))
+        path = QPainterPath(QPointF(-51, -4))
+        path.lineTo(-38, -4)
+        for i in range(8):
+            path.lineTo(-30 + i * 8, -14 if i % 2 == 0 else 6)
+        path.lineTo(38, -4)
+        path.lineTo(51, -4)
+        painter.drawPath(path)
         painter.setFont(QFont("DejaVu Sans", 8, QFont.Weight.Bold))
-        painter.drawText(QRectF(-68, -35, 136, 17), Qt.AlignmentFlag.AlignCenter, self.kind + "1")
+        painter.drawText(QRectF(-68, -35, 136, 17), Qt.AlignmentFlag.AlignCenter, self.label)
         painter.setFont(QFont("DejaVu Sans", 12, QFont.Weight.Bold))
-        painter.drawText(QRectF(-73, 20, 146, 26), Qt.AlignmentFlag.AlignCenter,
-                         f"{self.value:g} {'Ω' if self.kind == 'R' else 'µF'}")
+        painter.drawText(
+            QRectF(-73, 20, 146, 26),
+            Qt.AlignmentFlag.AlignCenter,
+            f"{self.display_value:g} Ω",
+        )
 
     def mousePressEvent(self, event):
-        self.clicked.emit(self.kind)
+        self.clicked.emit(self.identifier)
         event.accept()
 
     def hoverEnterEvent(self, event):
@@ -104,8 +103,9 @@ class ComponentItem(QGraphicsObject):
             self.animations.stop()
         self.setOpacity(1)
         self.setScale(1)
+        self.value = value
         if not animated:
-            self.value = value
+            self.display_value = value
             self.update()
             return
         group = QSequentialAnimationGroup(self)
@@ -114,7 +114,7 @@ class ComponentItem(QGraphicsObject):
         fade_out.setStartValue(1.0)
         fade_out.setEndValue(0.15)
         def swap():
-            self.value = value
+            self.display_value = value
             self.update()
         fade_out.finished.connect(swap)
         fade_in = QPropertyAnimation(self, b"opacity")
@@ -131,13 +131,13 @@ class ComponentItem(QGraphicsObject):
 
 
 class CircuitView(QGraphicsView):
-    """Escena RC de topología fija, escalada automáticamente al panel."""
+    """Circuito dinámico de ramas en paralelo con resistencias en serie."""
 
     selected = Signal(str)
 
     def __init__(self):
         super().__init__()
-        self.scene_model = QGraphicsScene(0, 0, 700, 330, self)
+        self.scene_model = QGraphicsScene(self)
         self.setScene(self.scene_model)
         self.setStyleSheet("border: none; background: transparent;")
         self.setFrameShape(QFrame.Shape.NoFrame)
@@ -145,32 +145,52 @@ class CircuitView(QGraphicsView):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setMinimumHeight(330)
-        self.resistor = ComponentItem("R", 1000)
-        self.capacitor = ComponentItem("C", 470)
-        self.resistor.setPos(315, 115)
-        self.capacitor.setPos(535, 188)
-        for item in (self.resistor, self.capacitor):
-            self.scene_model.addItem(item)
-            item.clicked.connect(self.select)
-        self.voltage = 5.0
-        self.measured = None
+        self.component_items: dict[str, ComponentItem] = {}
+        self.rows: list[list[str]] = []
         self.phase = 0.0
         self.animation_timer = QTimer(self)
         self.animation_timer.setInterval(50)
         self.animation_timer.timeout.connect(self.animate_field)
         self.animation_timer.start()
 
+    def configure(self, rows: list[list[tuple[str, str, float]]]) -> None:
+        self.scene_model.clear()
+        self.component_items.clear()
+        self.rows = [[identifier for identifier, _label, _value in row] for row in rows]
+        maximum_components = max(len(row) for row in rows)
+        right_rail = 390 + (maximum_components - 1) * 165
+        height = max(300, 140 + (len(rows) - 1) * 115)
+        self.right_rail = right_rail
+        self.branch_y = [80 + index * 115 for index in range(len(rows))]
+        self.scene_model.setSceneRect(0, 0, right_rail + 80, height)
+        for row_index, row in enumerate(rows):
+            y = self.branch_y[row_index]
+            for component_index, (identifier, label, value) in enumerate(row):
+                item = ComponentItem(identifier, value, label)
+                item.setPos(220 + component_index * 165, y)
+                item.clicked.connect(self.select)
+                self.scene_model.addItem(item)
+                self.component_items[identifier] = item
+        self.viewport().update()
+        self.fitInView(self.scene_model.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
+
+    def current_rows(self) -> list[list[float]]:
+        return [
+            [self.component_items[identifier].value for identifier in row]
+            for row in self.rows
+        ]
+
     def animate_field(self):
         if self.isVisible():
             self.phase = (self.phase + 0.008) % 1
             self.viewport().update()
 
-    def select(self, kind: str):
+    def select(self, identifier: str):
         """Resalta el componente y solicita su menú contextual."""
-        for item in (self.resistor, self.capacitor):
-            item.active = item.kind == kind
+        for component_id, item in self.component_items.items():
+            item.active = component_id == identifier
             item.update()
-        self.selected.emit(kind)
+        self.selected.emit(identifier)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -180,46 +200,35 @@ class CircuitView(QGraphicsView):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor("#abc7b8"))
-        painter.drawRoundedRect(QRectF(10, 44, 680, 285), 30, 30)
+        painter.drawRoundedRect(self.sceneRect().adjusted(10, 10, -10, -10), 30, 30)
         painter.setPen(QPen(QColor("#7fa791"), 2.5))
         painter.setBrush(QColor("#d9edcf"))
-        painter.drawRoundedRect(QRectF(10, 34, 680, 285), 30, 30)
+        painter.drawRoundedRect(self.sceneRect().adjusted(10, 4, -10, -16), 30, 30)
         painter.setPen(QPen(QColor("#bed5b4"), 1.5))
-        for x in range(34, 685, 22):
-            for y in range(57, 310, 22):
+        for x in range(34, int(self.sceneRect().right()) - 20, 22):
+            for y in range(27, int(self.sceneRect().bottom()) - 20, 22):
                 painter.drawPoint(x, y)
-        for x, y in ((30, 54), (670, 54), (30, 299), (670, 299)):
-            painter.setPen(QPen(QColor("#7fa791"), 2))
-            painter.setBrush(QColor("#f5f9e9"))
-            painter.drawEllipse(QPointF(x, y), 6, 6)
-            painter.drawLine(QPointF(x - 3, y), QPointF(x + 3, y))
-        tracks = [((105, 115), (238, 115)), ((392, 115), (535, 115)),
-                  ((535, 115), (535, 139)), ((535, 237), (535, 275)),
-                  ((535, 275), (105, 275)), ((105, 275), (105, 225)),
-                  ((105, 161), (105, 115))]
+        first_y, last_y = self.branch_y[0], self.branch_y[-1]
+        left_rail, right_rail = 100, self.right_rail
+        tracks = [((left_rail, first_y), (left_rail, last_y)),
+                  ((right_rail, first_y), (right_rail, last_y))]
+        for row_index, identifiers in enumerate(self.rows):
+            y = self.branch_y[row_index]
+            centers = [220 + index * 165 for index in range(len(identifiers))]
+            tracks.append(((left_rail, y), (centers[0] - 82, y)))
+            for start, end in zip(centers, centers[1:]):
+                tracks.append(((start + 82, y), (end - 82, y)))
+            tracks.append(((centers[-1] + 82, y), (right_rail, y)))
         for color, width in (("#8aac97", 13), ("#f8fff0", 7)):
             painter.setPen(QPen(QColor(color), width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
             for start, end in tracks:
                 painter.drawLine(QPointF(*start), QPointF(*end))
-        painter.setBrush(QColor("#ffdb75"))
-        painter.setPen(QPen(QColor("#a17c3b"), 2.5))
-        painter.drawEllipse(QPointF(105, 193), 32, 32)
-        painter.drawLine(QPointF(96, 181), QPointF(114, 181))
-        painter.drawLine(QPointF(105, 172), QPointF(105, 190))
-        painter.drawLine(QPointF(98, 207), QPointF(112, 207))
-        painter.setFont(QFont("DejaVu Sans", 10, QFont.Weight.Bold))
-        painter.setPen(QColor("#4b715b"))
-        painter.drawText(QRectF(43, 73, 125, 25), Qt.AlignmentFlag.AlignCenter, f"{self.voltage:g} V")
         painter.setPen(QPen(QColor("#6c997c"), 2))
         painter.setBrush(QColor("#fff9ed"))
-        for point in ((535, 115), (535, 275), (105, 275)):
-            painter.drawEllipse(QPointF(*point), 7, 7)
+        for y in self.branch_y:
+            painter.drawEllipse(QPointF(left_rail, y), 7, 7)
+            painter.drawEllipse(QPointF(right_rail, y), 7, 7)
         painter.setPen(Qt.PenStyle.NoPen)
-        for offset in (0, 0.33, 0.66):
-            x = 105 + ((self.phase + offset) % 1) * 430
-            painter.setBrush(QColor("#e9ac39"))
-            painter.drawEllipse(QPointF(x, 115), 4, 4)
-            painter.drawEllipse(QPointF(640 - x, 275), 4, 4)
 
 
 class DeviceIllustration(QWidget):
@@ -228,7 +237,8 @@ class DeviceIllustration(QWidget):
     def __init__(self):
         super().__init__()
         self.setMinimumHeight(230)
-        self.voltage = None
+        self.value = None
+        self.unit = "Ω"
         self.passed = False
         self.phase = 0.0
 
@@ -271,7 +281,7 @@ class DeviceIllustration(QWidget):
             p.setBrush(Qt.BrushStyle.NoBrush)
             for x in (-26, 26):
                 p.drawArc(QRectF(x - 9, -60, 18, 18), 0, 180 * 16)
-        elif self.voltage is None:
+        elif self.value is None:
             for x in (-26, 26):
                 p.drawLine(QPointF(x - 8, -49), QPointF(x + 8, -49))
         else:
@@ -288,7 +298,7 @@ class DeviceIllustration(QWidget):
         p.setPen(ink)
         p.setFont(QFont("DejaVu Sans Mono", 11, QFont.Weight.Bold))
         p.drawText(QRectF(-42, 22, 84, 34), Qt.AlignmentFlag.AlignCenter,
-                   f"{self.voltage:.2f} V" if self.voltage is not None else "· · ·")
+                   f"{self.value:.2f} {self.unit}" if self.value is not None else "· · ·")
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QColor("#52ab8c" if self.passed else "#d9a848"))
         p.drawEllipse(QPointF(0, 70), 5, 5)
@@ -306,16 +316,16 @@ class WorkerSignals(QObject):
 class SimulationWorker(QRunnable):
     """Tarea sin acceso a widgets; devuelve una revisión para descartar resultados viejos."""
 
-    def __init__(self, revision: int, challenge: Challenge, resistance: float, capacity: float):
+    def __init__(self, revision: int, challenge: Challenge, rows: list[list[float]]):
         super().__init__()
         self.revision, self.challenge = revision, challenge
-        self.resistance, self.capacity = resistance, capacity
+        self.rows = rows
         self.signals = WorkerSignals()
 
     @Slot()
     def run(self):
         try:
-            result = simulate(self.challenge, self.resistance, self.capacity)
+            result = simulate(self.challenge, self.rows)
             self.signals.finished.emit(self.revision, result, "")
         except Exception as error:
             self.signals.finished.emit(self.revision, None, str(error))

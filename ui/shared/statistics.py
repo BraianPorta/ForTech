@@ -41,7 +41,7 @@ class StatisticsDialog(QDialog):
             axes = figure.subplots(1, 2)
             x = np.arange(len(rows))
             captions = [
-                f"{i + 1 + len(records) - len(rows):02d}\n{r['reto_id']}"
+                f"{i + 1 + len(records) - len(rows):02d}\n{r['dificultad']}"
                 for i, r in enumerate(rows)
             ]
             for ax in axes:

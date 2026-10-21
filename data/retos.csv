@@ -1,3 +1,2 @@
-id,nombre,voltaje_v,resistencia_ohm,capacidad_uf,objetivo_v,tiempo_objetivo_s,tolerancia_v,descripcion
-RC-01,Sensor de campo,5.0,1000,470,3.3,0.6,0.15,Ajusta la resistencia y el condensador para alcanzar la tensión objetivo en el instante indicado.
-RC-02,Sensor de respuesta lenta,5.0,2200,470,3.3,1.2,0.15,Configura una carga más lenta conservando la misma alimentación y tensión objetivo.
+modo,dificultad,enunciado,resultado,tipo_1,valor_1,tipo_2,valor_2
+0,1,Configura una resistencia en serie de 1000 Ω.,1000,fila_1,,ohm,1000

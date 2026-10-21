@@ -48,6 +48,9 @@ class GameHeader(QWidget):
         top.addWidget(hud)
         top.addSpacing(8)
 
-        self.progress_button = QPushButton("Mi progreso")
-        self.progress_button.setObjectName("quiet")
-        top.addWidget(self.progress_button)
+        self.menu_button = QPushButton("☰")
+        self.menu_button.setObjectName("quiet")
+        self.menu_button.setAccessibleName("Abrir menú")
+        self.menu_button.setToolTip("Menú")
+        self.menu_button.setFixedWidth(56)
+        top.addWidget(self.menu_button)
