@@ -5,7 +5,7 @@ from PySide6.QtCore import QEasingCurve, QObject, QPointF, QRectF, QRunnable, QP
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QPainter, QPainterPath, QPalette, QPen, QLinearGradient, QRadialGradient
 from PySide6.QtWidgets import QApplication, QFrame, QGraphicsObject, QGraphicsScene, QGraphicsView, QLabel, QVBoxLayout, QWidget
 from scientific_model import Challenge, simulate
-from game_style import BG, PANEL, EDGE, TEXT, MUTED, TEAL, ORANGE, STYLE
+from ui.style import APPLICATION_STYLE, BG, PANEL, TEXT, TEAL
 BASE = Path(__file__).resolve().parent
 
 class GameBackdrop(QWidget):
@@ -49,7 +49,7 @@ def configure_application(app: QApplication):
         palette.setColor(role, QColor(color))
     app.setPalette(palette)
     app.setFont(QFont("DejaVu Sans", 10))
-    app.setStyleSheet(STYLE)
+    app.setStyleSheet(APPLICATION_STYLE)
 
 
 def label(text: str, kind: str = "", wrap: bool = False) -> QLabel:
@@ -360,5 +360,4 @@ class SimulationWorker(QRunnable):
             self.signals.finished.emit(self.revision, result, "")
         except Exception as error:
             self.signals.finished.emit(self.revision, None, str(error))
-
 

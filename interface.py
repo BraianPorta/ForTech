@@ -4,12 +4,14 @@ from PySide6.QtCore import QEvent, QThreadPool, QTimer, Qt, Signal, Slot
 from PySide6.QtGui import QPainter, QColor
 from PySide6.QtWidgets import (QApplication, QDialog, QFrame, QGridLayout,
     QHBoxLayout, QMainWindow, QPushButton, QScrollArea, QVBoxLayout, QWidget)
-from game_session import CATALOG, GameSession, ProgressStore
+from ui.components.session import CATALOG, GameSession, ProgressStore
 from motion import SceneTransition, WidgetMotion
-from game_style import BG, PANEL, EDGE, TEXT, MUTED, TEAL, ORANGE, STYLE
-from game_widgets import (GameBackdrop, CircuitView, DeviceIllustration,
-                          SimulationWorker, configure_application, label)
+from ui.style import BG, PANEL, EDGE, TEXT, MUTED, TEAL, ORANGE
+from game_widgets import GameBackdrop, SimulationWorker, configure_application, label
 from scientific_model import Simulation, load_challenges
+from ui.components.circuit_panel import CircuitPanel
+from ui.components.header import GameHeader
+from ui.components.mission_panel import MissionPanel
 
 BASE = Path(__file__).resolve().parent
 
@@ -20,6 +22,13 @@ class ComponentMenu(QFrame):
 
     def __init__(self, parent):
         super().__init__(parent)
+        self.setStyleSheet("""
+            QFrame#componentMenu { background: #ffffff; border: 3px solid #7252ba; border-bottom: 7px solid #7252ba; border-radius: 18px; }
+            QLabel#section { font-size: 20px; font-weight: 700; }
+            QPushButton#preset { padding: 11px 7px; font-size: 12px; }
+            QPushButton#preset:checked { background: #d6f2dc; border-color: #21806b; color: #216853; }
+            QPushButton#closeMenu { padding: 2px 8px; border: none; background: transparent; color: #746985; }
+        """)
         self.setObjectName("componentMenu")
         self.setFixedWidth(302)
         self.kind = "R"
@@ -79,6 +88,9 @@ class StatisticsDialog(QDialog):
     """Gráficas de partidas reales, mostradas únicamente al consultar el progreso."""
     def __init__(self, records, parent=None):
         super().__init__(parent)
+        self.setStyleSheet("""
+            QLabel#hero { font-size: 30px; font-weight: 700; }
+        """)
         self.setWindowTitle("Circuit Quest · Mi progreso")
         self.resize(1000, 610)
         layout = QVBoxLayout(self)
@@ -145,6 +157,12 @@ class VictoryOverlay(QWidget):
 
     def __init__(self, parent):
         super().__init__(parent)
+        self.setStyleSheet("""
+            QFrame#victory { background: #fff9ed; border: 3px solid #7252ba; border-bottom: 9px solid #7252ba; border-radius: 28px; }
+            QLabel#gold { color: #392d57; font-size: 29px; font-weight: 700; }
+            QLabel#hero { font-size: 30px; font-weight: 700; }
+            QLabel#section { font-size: 20px; font-weight: 700; }
+        """)
         self.box = QFrame(self)
         self.box.setObjectName("victory")
         self.box.setFixedWidth(550)
@@ -224,114 +242,37 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(self.content_root)
         layout.setContentsMargins(30, 24, 30, 26)
         layout.setSpacing(22)
-
-        top = QHBoxLayout()
-        mark = label("ϟ", "levelBadge")
-        mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        mark.setFixedSize(56, 56)
-        top.addWidget(mark)
-        top.addSpacing(8)
-        top.addWidget(label("Circuit Quest", "title"))
-        top.addStretch()
-        hud = QFrame()
-        hud.setObjectName("hud")
-        metrics = QHBoxLayout(hud)
-        metrics.setContentsMargins(20, 9, 20, 10)
-        metrics.setSpacing(24)
-        self.timer_label = label("00:00", "metric")
-        self.changes_label = label("00", "metric")
-        self.attempts_label = label("00", "metric")
-        for title, value in [("TIEMPO", self.timer_label), ("CAMBIOS", self.changes_label), ("INTENTOS", self.attempts_label)]:
-            col = QVBoxLayout()
-            col.setSpacing(0)
-            col.addWidget(label(title, "eyebrow"))
-            col.addWidget(value)
-            metrics.addLayout(col)
-        top.addWidget(hud)
-        top.addSpacing(8)
-        self.progress_button = QPushButton("Mi progreso")
-        self.progress_button.setObjectName("quiet")
-        self.progress_button.clicked.connect(self.show_statistics)
-        top.addWidget(self.progress_button)
-        layout.addLayout(top)
+        self.header = GameHeader()
+        self.header.progress_button.clicked.connect(self.show_statistics)
+        self.timer_label = self.header.timer_label
+        self.changes_label = self.header.changes_label
+        self.attempts_label = self.header.attempts_label
+        self.progress_button = self.header.progress_button
+        layout.addWidget(self.header)
 
         body = QHBoxLayout()
         body.setSpacing(20)
-        mission = QFrame()
-        mission.setObjectName("mission")
-        mission.setFixedWidth(232)
-        quest = QVBoxLayout(mission)
-        quest.setContentsMargins(22, 24, 22, 24)
-        quest.setSpacing(15)
-        self.mission_tag = label("", "levelBadge")
-        self.mission_tag.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        quest.addWidget(self.mission_tag)
-        self.mission_title = label("Despierta al robot", "hero", True)
-        quest.addWidget(self.mission_title)
-        self.device_name = label("", "muted", True)
-        quest.addWidget(self.device_name)
-        quest.addStretch(1)
-        quest.addWidget(label("OBJETIVO", "eyebrow"))
-        self.target_label = label("", "gold", True)
-        quest.addWidget(self.target_label)
-        self.tolerance_label = label("", "muted", True)
-        quest.addWidget(self.tolerance_label)
-        quest.addStretch(1)
-        self.description = label("Toca R1 o C1\npara cambiar una pieza.", "hint", True)
-        quest.addWidget(self.description)
-        body.addWidget(mission)
+        self.mission_panel = MissionPanel()
+        self.mission_tag = self.mission_panel.mission_tag
+        self.mission_title = self.mission_panel.mission_title
+        self.device_name = self.mission_panel.device_name
+        self.target_label = self.mission_panel.target_label
+        self.tolerance_label = self.mission_panel.tolerance_label
+        self.description = self.mission_panel.description
+        body.addWidget(self.mission_panel)
 
-        stage = QFrame()
-        stage.setObjectName("playfield")
-        field = QVBoxLayout(stage)
-        field.setContentsMargins(20, 20, 20, 24)
-        field.setSpacing(12)
-        stage_top = QHBoxLayout()
-        stage_top.addWidget(label("EL TALLER", "eyebrow"))
-        stage_top.addStretch()
-        self.level_path = label("", "hint")
-        stage_top.addWidget(self.level_path)
-        field.addLayout(stage_top)
-        arena = QHBoxLayout()
-        arena.setSpacing(0)
-        self.circuit = CircuitView()
+        self.circuit_panel = CircuitPanel()
+        self.level_path = self.circuit_panel.level_path
+        self.circuit = self.circuit_panel.circuit
+        self.device = self.circuit_panel.device
+        self.status = self.circuit_panel.status
+        self.feedback = self.circuit_panel.footer.feedback
+        self.reset_button = self.circuit_panel.footer.reset_button
+        self.simulate_button = self.circuit_panel.footer.simulate_button
         self.circuit.selected.connect(self.select_component)
-        arena.addWidget(self.circuit, 1)
-        dock = QFrame()
-        dock.setObjectName("deviceDock")
-        dock.setFixedWidth(210)
-        right = QVBoxLayout(dock)
-        right.setContentsMargins(0, 0, 0, 0)
-        self.device = DeviceIllustration()
-        self.device.setFixedHeight(280)
-        self.circuit.animation_timer.timeout.connect(self.device.animate)
-        right.addStretch()
-        right.addWidget(self.device)
-        self.status = label("", "badge", True)
-        self.status.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        right.addWidget(self.status)
-        right.addStretch()
-        arena.addWidget(dock)
-        field.addLayout(arena, 1)
-        controls = QFrame()
-        controls.setObjectName("controls")
-        footer = QHBoxLayout(controls)
-        footer.setContentsMargins(16, 14, 16, 14)
-        self.feedback = label("", "muted", True)
-        footer.addWidget(self.feedback, 1)
-        self.reset_button = QPushButton("↻")
-        self.reset_button.setObjectName("reset")
-        self.reset_button.setAccessibleName("Reiniciar misión")
-        self.reset_button.setToolTip("Reiniciar misión")
-        self.reset_button.setFixedWidth(56)
         self.reset_button.clicked.connect(lambda: self.change_level(self.level_index))
-        footer.addWidget(self.reset_button)
-        self.simulate_button = QPushButton("ϟ  ACTIVAR")
-        self.simulate_button.setObjectName("primary")
         self.simulate_button.clicked.connect(self.run_simulation)
-        footer.addWidget(self.simulate_button)
-        field.addWidget(controls)
-        body.addWidget(stage, 1)
+        body.addWidget(self.circuit_panel, 1)
         layout.addLayout(body, 1)
 
         self.component_menu = ComponentMenu(self.content_root)
