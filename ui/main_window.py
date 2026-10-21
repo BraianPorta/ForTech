@@ -1,210 +1,29 @@
 """Pantalla de juego; las gráficas se reservan a las estadísticas del jugador."""
 from pathlib import Path
-from PySide6.QtCore import QEvent, QThreadPool, QTimer, Qt, Signal, Slot
-from PySide6.QtGui import QPainter, QColor
-from PySide6.QtWidgets import (QApplication, QDialog, QFrame, QGridLayout,
-    QHBoxLayout, QMainWindow, QPushButton, QScrollArea, QVBoxLayout, QWidget)
-from ui.components.session import CATALOG, GameSession, ProgressStore
-from motion import SceneTransition, WidgetMotion
-from ui.style import BG, PANEL, EDGE, TEXT, MUTED, TEAL, ORANGE
-from game_widgets import GameBackdrop, SimulationWorker, configure_application, label
-from scientific_model import Simulation, load_challenges
-from ui.components.circuit_panel import CircuitPanel
-from ui.components.header import GameHeader
-from ui.components.mission_panel import MissionPanel
 
-BASE = Path(__file__).resolve().parent
+from PySide6.QtCore import QEvent, QThreadPool, QTimer, Qt, Slot
+from PySide6.QtWidgets import (
+    QApplication,
+    QFrame,
+    QHBoxLayout,
+    QMainWindow,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
 
+from data import ProgressStore, Simulation, load_challenges
+from ui.header.header import GameHeader
+from ui.panel.circuit_panel import CircuitPanel
+from ui.panel.game_widgets import GameBackdrop, SimulationWorker
+from ui.panel.overlays import ComponentMenu, VictoryOverlay
+from ui.shared.motion import SceneTransition
+from ui.shared.session import GameSession
+from ui.shared.statistics import StatisticsDialog
+from ui.shared.style import ORANGE
+from ui.side.mission_panel import MissionPanel
 
-class ComponentMenu(QFrame):
-    """Inventario cerrado de piezas. No admite valores escritos por el jugador."""
-    chosen = Signal(str, float)
-
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.setStyleSheet("""
-            QFrame#componentMenu { background: #ffffff; border: 3px solid #7252ba; border-bottom: 7px solid #7252ba; border-radius: 18px; }
-            QLabel#section { font-size: 20px; font-weight: 700; }
-            QPushButton#preset { padding: 11px 7px; font-size: 12px; }
-            QPushButton#preset:checked { background: #d6f2dc; border-color: #21806b; color: #216853; }
-            QPushButton#closeMenu { padding: 2px 8px; border: none; background: transparent; color: #746985; }
-        """)
-        self.setObjectName("componentMenu")
-        self.setFixedWidth(302)
-        self.kind = "R"
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 12, 14, 14)
-        layout.setSpacing(9)
-        top = QHBoxLayout()
-        self.title = label("", "section")
-        top.addWidget(self.title, 1)
-        close = QPushButton("×")
-        close.setObjectName("closeMenu")
-        close.setAccessibleName("Cerrar inventario")
-        close.clicked.connect(self.dismiss)
-        top.addWidget(close)
-        layout.addLayout(top)
-        grid = QGridLayout()
-        grid.setSpacing(7)
-        self.buttons = []
-        for index in range(6):
-            button = QPushButton()
-            button.setObjectName("preset")
-            button.setCheckable(True)
-            button.clicked.connect(lambda _checked=False, i=index: self.choose(self.values[i]))
-            grid.addWidget(button, index // 3, index % 3)
-            self.buttons.append(button)
-        layout.addLayout(grid)
-        self.motion = WidgetMotion(self)
-        self.hide()
-
-    def open_above(self, kind, current, anchor):
-        self.kind, self.values = kind, CATALOG[kind]
-        unit = "Ω" if kind == "R" else "µF"
-        self.title.setText("R1 · Resistencia" if kind == "R" else "C1 · Condensador")
-        for button, value in zip(self.buttons, self.values):
-            button.setText(f"{value:g} {unit}")
-            button.setChecked(current == value)
-        self.adjustSize()
-        x = max(10, min(anchor.center().x() - self.width() // 2,
-                        self.parentWidget().width() - self.width() - 10))
-        self.move(x, max(10, anchor.top() - self.height() - 12))
-        self.motion.reveal()
-
-    def dismiss(self):
-        self.motion.dismiss()
-
-    def hide(self):
-        if hasattr(self, "motion"):
-            self.motion.reset()
-        super().hide()
-
-    def choose(self, value):
-        self.dismiss()
-        self.chosen.emit(self.kind, float(value))
-
-
-class StatisticsDialog(QDialog):
-    """Gráficas de partidas reales, mostradas únicamente al consultar el progreso."""
-    def __init__(self, records, parent=None):
-        super().__init__(parent)
-        self.setStyleSheet("""
-            QLabel#hero { font-size: 30px; font-weight: 700; }
-        """)
-        self.setWindowTitle("Circuit Quest · Mi progreso")
-        self.resize(1000, 610)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(28, 24, 28, 24)
-        layout.setSpacing(16)
-        layout.addWidget(label("TU RECORRIDO", "eyebrow"))
-        layout.addWidget(label("Mi progreso", "hero"))
-        self.canvas = None
-        if not records:
-            layout.addStretch()
-            empty = label("Completa tu primer nivel.", "muted", True)
-            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            layout.addWidget(empty)
-            layout.addStretch()
-        else:
-            import numpy as np
-            from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
-            from matplotlib.figure import Figure
-            from matplotlib.ticker import MaxNLocator
-            missions = "misión resuelta" if len(records) == 1 else "misiones resueltas"
-            layout.addWidget(label(f"{len(records)} {missions} · Últimas 10 partidas", "muted"))
-            rows = records[-10:]
-            figure = Figure(figsize=(9, 3.6), facecolor=BG, layout="constrained")
-            self.canvas = FigureCanvasQTAgg(figure)
-            axes = figure.subplots(1, 2)
-            x = np.arange(len(rows))
-            captions = [f"{i + 1 + len(records) - len(rows):02d}\n{r['reto_id']}" for i, r in enumerate(rows)]
-            for ax in axes:
-                ax.set_facecolor(BG)
-                ax.spines[["top", "right"]].set_visible(False)
-                for spine in ax.spines.values():
-                    spine.set_color(EDGE)
-                ax.tick_params(colors=MUTED, labelsize=9)
-                ax.set_xticks(x, captions)
-                ax.set_xlabel("Partida / misión", color=MUTED)
-                ax.grid(axis="y", color=EDGE, alpha=0.5)
-                ax.set_axisbelow(True)
-            axes[0].bar(x, [r["tiempo_s"] for r in rows], color=TEAL, width=0.55)
-            axes[0].set_title("Tiempo para resolver la misión", color=TEXT, pad=15)
-            axes[0].set_ylabel("Segundos", color=MUTED)
-            axes[1].bar(x - 0.17, [r["cambios_r"] for r in rows], width=0.34, color=TEAL, label="Resistencia")
-            axes[1].bar(x + 0.17, [r["cambios_c"] for r in rows], width=0.34, color=ORANGE, label="Condensador")
-            axes[1].set_title("Cambios de componentes", color=TEXT, pad=15)
-            axes[1].set_ylabel("Número de cambios", color=MUTED)
-            axes[1].yaxis.set_major_locator(MaxNLocator(integer=True))
-            axes[1].legend(facecolor=PANEL, edgecolor=EDGE, labelcolor=TEXT)
-            layout.addWidget(self.canvas, 1)
-            latest = rows[-1]
-            layout.addWidget(label(f"Última misión: {latest['pruebas']} pruebas · {latest['cambios_total']} cambios · {latest['tiempo_s']:.1f} s", "muted"))
-        close = QPushButton("VOLVER AL JUEGO")
-        close.clicked.connect(lambda: self.motion.dismiss(self.accept))
-        layout.addWidget(close, alignment=Qt.AlignmentFlag.AlignRight)
-        self.motion = WidgetMotion(self)
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        self.motion.reveal(distance=0, duration=280)
-
-
-class VictoryOverlay(QWidget):
-    """Pantalla de misión cumplida sin gráficas durante la partida."""
-    next_level = Signal()
-    statistics = Signal()
-
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.setStyleSheet("""
-            QFrame#victory { background: #fff9ed; border: 3px solid #7252ba; border-bottom: 9px solid #7252ba; border-radius: 28px; }
-            QLabel#gold { color: #392d57; font-size: 29px; font-weight: 700; }
-            QLabel#hero { font-size: 30px; font-weight: 700; }
-            QLabel#section { font-size: 20px; font-weight: 700; }
-        """)
-        self.box = QFrame(self)
-        self.box.setObjectName("victory")
-        self.box.setFixedWidth(550)
-        layout = QVBoxLayout(self.box)
-        layout.setContentsMargins(36, 30, 36, 30)
-        layout.setSpacing(16)
-        for text, style in [("✦  ✦  ✦", "gold"), ("¡NIVEL SUPERADO!", "hero")]:
-            item = label(text, style)
-            item.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            layout.addWidget(item)
-        self.summary = label("", "section", True)
-        self.summary.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.summary)
-        advance = QPushButton("SIGUIENTE MISIÓN  →")
-        advance.setObjectName("primary")
-        advance.clicked.connect(self.next_level.emit)
-        layout.addWidget(advance)
-        progress = QPushButton("VER MI PROGRESO")
-        progress.clicked.connect(self.statistics.emit)
-        layout.addWidget(progress)
-        self.motion = WidgetMotion(self)
-        self.hide()
-
-    def show_record(self, record):
-        if self.isVisible():
-            self.motion.reset()
-        changes = "cambio" if record['cambios_total'] == 1 else "cambios"
-        attempts = "prueba" if record['pruebas'] == 1 else "pruebas"
-        self.summary.setText(f"{record['tiempo_s']:.1f} s     /     {record['cambios_total']} {changes}     /     {record['pruebas']} {attempts}")
-        self.setGeometry(self.parentWidget().rect())
-        self.box.adjustSize()
-        self.box.move((self.width() - self.box.width()) // 2, (self.height() - self.box.height()) // 2)
-        if not self.isVisible():
-            self.motion.reveal(distance=22, duration=340, moving=self.box)
-
-    def hide(self):
-        if hasattr(self, "motion"):
-            self.motion.reset()
-        super().hide()
-
-    def paintEvent(self, _event):
-        QPainter(self).fillRect(self.rect(), QColor(244, 235, 255, 225))
+BASE = Path(__file__).resolve().parents[1]
 
 
 class MainWindow(QMainWindow):

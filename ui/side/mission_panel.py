@@ -2,7 +2,7 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QVBoxLayout
 
-from game_widgets import label
+from ui.shared.widgets import label
 
 MISSION_STYLE = """
 QFrame#mission { background: #ffffff; border: 2px solid #e0d7ee; border-bottom: 6px solid #e0d7ee; border-radius: 24px; }

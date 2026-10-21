@@ -2,8 +2,9 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout
 
-from game_widgets import CircuitView, DeviceIllustration, label
-from ui.components.game_footer import GameFooter
+from ui.panel.game_footer import GameFooter
+from ui.panel.game_widgets import CircuitView, DeviceIllustration
+from ui.shared.widgets import label
 
 CIRCUIT_STYLE = """
 QFrame#playfield { background: #f1ecff; border: 2px solid #c7b7e4; border-bottom: 7px solid #c7b7e4; border-radius: 30px; }

@@ -1,7 +1,7 @@
 """Acciones de la partida y mensajes de resultado."""
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QPushButton
 
-from game_widgets import label
+from ui.shared.widgets import label
 
 FOOTER_STYLE = """
 QFrame#controls { background: transparent; border: none; }

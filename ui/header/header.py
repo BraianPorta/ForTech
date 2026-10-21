@@ -2,8 +2,8 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
-from game_widgets import label
-from ui.style import TEXT
+from ui.shared.style import TEXT
+from ui.shared.widgets import label
 
 HEADER_STYLE = f"""
 QLabel#title {{ color: #6042a6; font-size: 28px; font-weight: 700; letter-spacing: -1px; }}

@@ -5,7 +5,8 @@ import sys
 def main() -> int:
     from PySide6.QtCore import QCoreApplication, QEvent
     from PySide6.QtWidgets import QApplication
-    from interface import MainWindow, configure_application
+    from ui import MainWindow
+    from ui.shared.widgets import configure_application
 
     app = QApplication(sys.argv)
     configure_application(app)

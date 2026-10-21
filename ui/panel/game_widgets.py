@@ -1,12 +1,11 @@
-"""Piezas vectoriales, escena y tareas científicas reutilizadas por el juego."""
-from pathlib import Path
+"""Escena central del circuito, ilustraciones y simulación en segundo plano."""
 import math
 from PySide6.QtCore import QEasingCurve, QObject, QPointF, QRectF, QRunnable, QPropertyAnimation, QSequentialAnimationGroup, QTimer, Qt, Signal, Slot
-from PySide6.QtGui import QColor, QFont, QFontDatabase, QPainter, QPainterPath, QPalette, QPen, QLinearGradient, QRadialGradient
-from PySide6.QtWidgets import QApplication, QFrame, QGraphicsObject, QGraphicsScene, QGraphicsView, QLabel, QVBoxLayout, QWidget
-from scientific_model import Challenge, simulate
-from ui.style import APPLICATION_STYLE, BG, PANEL, TEXT, TEAL
-BASE = Path(__file__).resolve().parent
+from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
+from PySide6.QtWidgets import QFrame, QGraphicsObject, QGraphicsScene, QGraphicsView, QWidget
+
+from data import Challenge, simulate
+from ui.shared.style import BG
 
 class GameBackdrop(QWidget):
     """Papel cálido con confeti geométrico, dibujado sin imágenes externas."""
@@ -29,46 +28,6 @@ class GameBackdrop(QWidget):
         for x, y in ((18, 155), (self.width() - 18, self.height() - 80)):
             painter.drawLine(x - 7, y, x + 7, y)
             painter.drawLine(x, y - 7, x, y + 7)
-
-def configure_application(app: QApplication):
-    """Carga fuentes incluidas para que también funcione el render sin escritorio."""
-    for name in ("DejaVuSans.ttf", "DejaVuSans-Bold.ttf", "DejaVuSansMono.ttf"):
-        path = BASE / "assets" / "fonts" / name
-        if QFontDatabase.addApplicationFont(str(path)) < 0:
-            raise RuntimeError(f"No se pudo cargar la fuente {path.name}")
-    app.setStyle("Fusion")
-    palette = QPalette()
-    for role, color in ((QPalette.ColorRole.Window, BG),
-                        (QPalette.ColorRole.WindowText, TEXT),
-                        (QPalette.ColorRole.Base, PANEL),
-                        (QPalette.ColorRole.Text, TEXT),
-                        (QPalette.ColorRole.Button, PANEL),
-                        (QPalette.ColorRole.ButtonText, TEXT),
-                        (QPalette.ColorRole.Highlight, TEAL),
-                        (QPalette.ColorRole.HighlightedText, BG)):
-        palette.setColor(role, QColor(color))
-    app.setPalette(palette)
-    app.setFont(QFont("DejaVu Sans", 10))
-    app.setStyleSheet(APPLICATION_STYLE)
-
-
-def label(text: str, kind: str = "", wrap: bool = False) -> QLabel:
-    """Crea una etiqueta con un estilo semántico compartido."""
-    item = QLabel(text)
-    item.setObjectName(kind)
-    item.setWordWrap(wrap)
-    return item
-
-
-def card() -> tuple[QFrame, QVBoxLayout]:
-    """Crea un panel con márgenes y separación comunes."""
-    frame = QFrame()
-    frame.setObjectName("panel")
-    layout = QVBoxLayout(frame)
-    layout.setContentsMargins(20, 18, 20, 18)
-    layout.setSpacing(12)
-    return frame, layout
-
 
 class ComponentItem(QGraphicsObject):
     """Componente seleccionable con propiedades Qt de opacidad y escala."""
@@ -360,4 +319,3 @@ class SimulationWorker(QRunnable):
             self.signals.finished.emit(self.revision, result, "")
         except Exception as error:
             self.signals.finished.emit(self.revision, None, str(error))
-
