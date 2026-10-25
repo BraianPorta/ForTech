@@ -51,11 +51,18 @@ class ComponentMenu(QFrame):
         self.motion = WidgetMotion(self)
         self.hide()
 
-    def open_above(self, component_id, current, anchor):
-        self.component_id, self.values = component_id, CATALOG["R"]
-        self.title.setText(f"{component_id} · Resistencia")
-        for button, value in zip(self.buttons, self.values):
-            button.setText(f"{value:g} Ω")
+    def open_above(self, component_id, current, anchor, kind="R"):
+        self.component_id, self.values = component_id, CATALOG[kind]
+        unit = "W" if kind == "B" else "Ω"
+        name = "Bombilla" if kind == "B" else "Resistencia"
+        self.title.setText(f"{component_id} · {name}")
+        for index, button in enumerate(self.buttons):
+            if index >= len(self.values):
+                button.hide()
+                continue
+            value = self.values[index]
+            button.show()
+            button.setText(f"{value:g} {unit}")
             button.setChecked(current == value)
         self.adjustSize()
         x = max(10, min(anchor.center().x() - self.width() // 2,
@@ -77,10 +84,9 @@ class ComponentMenu(QFrame):
 
 
 class VictoryOverlay(QWidget):
-    """Pantalla de misión cumplida sin gráficas durante la partida."""
+    """Pantalla de misión cumplida, sin gráficas durante la partida."""
 
     next_level = Signal()
-    statistics = Signal()
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -106,14 +112,16 @@ class VictoryOverlay(QWidget):
         advance = QPushButton("SIGUIENTE MISIÓN  →")
         advance.setObjectName("primary")
         advance.clicked.connect(self.next_level.emit)
+        self.advance_button = advance
         layout.addWidget(advance)
-        progress = QPushButton("VER MI PROGRESO")
-        progress.clicked.connect(self.statistics.emit)
-        layout.addWidget(progress)
+        self.session_feedback = label("", "muted", True)
+        self.session_feedback.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.session_feedback.hide()
+        layout.addWidget(self.session_feedback)
         self.motion = WidgetMotion(self)
         self.hide()
 
-    def show_record(self, record):
+    def show_record(self, record, session_complete=False, session_error=""):
         if self.isVisible():
             self.motion.reset()
         changes = "cambio" if record["cambios_total"] == 1 else "cambios"
@@ -122,6 +130,20 @@ class VictoryOverlay(QWidget):
             f"{record['tiempo_s']:.1f} s     /     {record['cambios_total']} "
             f"{changes}     /     {record['pruebas']} {attempts}"
         )
+        self.advance_button.setText(
+            "VOLVER AL INICIO" if session_complete else "SIGUIENTE MISIÓN  →"
+        )
+        if session_complete:
+            self.session_feedback.setText(
+                "Todas las actividades completadas. "
+                + (
+                    "No se pudieron guardar las estadísticas: " + session_error
+                    if session_error else "Las estadísticas de la sesión están guardadas."
+                )
+            )
+            self.session_feedback.show()
+        else:
+            self.session_feedback.hide()
         self.setGeometry(self.parentWidget().rect())
         self.box.adjustSize()
         self.box.move((self.width() - self.box.width()) // 2,

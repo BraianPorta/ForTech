@@ -9,7 +9,6 @@ from ui.shared.widgets import label
 class PauseMenu(QWidget):
     resume_requested = Signal()
     home_requested = Signal()
-    progress_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -36,9 +35,6 @@ class PauseMenu(QWidget):
         self.resume_button.setObjectName("resume")
         self.resume_button.clicked.connect(self.resume_requested.emit)
         layout.addWidget(self.resume_button)
-        progress = QPushButton("VER MI PROGRESO")
-        progress.clicked.connect(self.progress_requested.emit)
-        layout.addWidget(progress)
         home = QPushButton("VOLVER A LA PANTALLA INICIAL")
         home.clicked.connect(self.home_requested.emit)
         layout.addWidget(home)

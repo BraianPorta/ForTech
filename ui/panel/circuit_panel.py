@@ -3,6 +3,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout
 
 from ui.panel.game_footer import GameFooter
+from ui.panel.flow_exercise import FlowExercisePanel
 from ui.panel.game_widgets import CircuitView, DeviceIllustration
 from ui.shared.widgets import label
 
@@ -24,7 +25,8 @@ class CircuitPanel(QFrame):
         layout.setSpacing(12)
 
         stage_header = QHBoxLayout()
-        stage_header.addWidget(label("RED DE RESISTENCIAS", "eyebrow"))
+        self.stage_title = label("RED DE RESISTENCIAS", "eyebrow")
+        stage_header.addWidget(self.stage_title)
         stage_header.addStretch()
         self.level_path = label("", "hint")
         stage_header.addWidget(self.level_path)
@@ -32,6 +34,8 @@ class CircuitPanel(QFrame):
 
         arena = QHBoxLayout()
         arena.setSpacing(0)
+        self.flow_exercise = FlowExercisePanel()
+        arena.addWidget(self.flow_exercise, 1)
         self.circuit = CircuitView()
         arena.addWidget(self.circuit, 1)
         dock = QFrame()
@@ -49,7 +53,14 @@ class CircuitPanel(QFrame):
         device_layout.addWidget(self.status)
         device_layout.addStretch()
         arena.addWidget(dock)
+        self.device_dock = dock
         layout.addLayout(arena, 1)
 
         self.footer = GameFooter()
         layout.addWidget(self.footer)
+        self.show_flow_exercise(False)
+
+    def show_flow_exercise(self, visible: bool):
+        self.flow_exercise.setVisible(visible)
+        self.circuit.setVisible(not visible)
+        self.device_dock.setVisible(not visible)

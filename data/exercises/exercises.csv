@@ -1,0 +1,7 @@
+﻿id,modo,dificultad,enunciado,resultado,tension_v,tipo_1,valor_1,tipo_2,valor_2,tipo_3,valor_3,tipo_4,valor_4,tipo_ejercicio
+1,0,1,"Fuente de tensión de 12 V. Consigue una resistencia equivalente de 24 Ω usando una única bombilla en serie. Bombillas disponibles: 3 W, 6 W y 12 W. Usa R = V²/P para obtener la resistencia de cada bombilla.",24,12,fila_1,,bombilla_w,6,,,,,
+2,0,2,Fuente de 12 V. Configura dos bombillas de 3 W en paralelo para obtener una resistencia equivalente de 24 Ω. Usa R = V²/P para calcular la resistencia de cada bombilla y 1/Rp = 1/R1 + 1/R2 para la conexión en paralelo.,24,12,fila_1,,bombilla_w,3,fila_2,,bombilla_w,3,
+3,0,3,Fuente de 12 V. Configura dos bombillas de 12 W en serie para obtener una resistencia equivalente de 24 Ω. Usa R = V²/P para calcular la resistencia de cada bombilla y Rs = R1 + R2 para la conexión en serie.,24,12,fila_1,,bombilla_w,12,bombilla_w,12,,,
+4,1,1,Tenemos un tubo con un diámetro D por el que circula agua. Elige la velocidad v y el diámetro D que producirían un flujo laminar.,2300,,,,,,,,,,laminar_flow
+5,1,2,Tenemos un tubo de 1 metro de longitud. Elige la temperatura del agua Ts y el diámetro D adecuados para transferir hacia el exterior entre 30 W y 60 W.,45,,,,,,,,,,heat_transfer
+6,1,3,Elige el diámetro D y la longitud L de una tubería de PVC para obtener una pérdida de carga entre 30 kPa y 60 kPa.,45,,,,,,,,,,pressure_loss

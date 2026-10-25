@@ -24,7 +24,7 @@ class GameHeader(QWidget):
         mark.setFixedSize(56, 56)
         top.addWidget(mark)
         top.addSpacing(8)
-        top.addWidget(label("Circuit Quest", "title"))
+        top.addWidget(label("ForTech", "title"))
         top.addStretch()
 
         hud = QFrame()

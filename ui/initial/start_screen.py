@@ -1,12 +1,13 @@
 """Selección de personaje antes de entrar en la partida."""
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from ui.shared.widgets import label
 
 
 class StartScreen(QWidget):
     character_selected = Signal(str)
+    statistics_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -29,10 +30,10 @@ class StartScreen(QWidget):
         layout.setSpacing(18)
         layout.addStretch(1)
 
-        brand = label("CIRCUIT QUEST", "brand")
+        brand = label("FORTECH", "brand")
         brand.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(brand)
-        title = label("¿Quién juega?", "title")
+        title = label("¿Ready", "title")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
         subtitle = label("Elige una aventura para continuar.", "subtitle")
@@ -57,11 +58,26 @@ class StartScreen(QWidget):
             lambda: self.character_selected.emit("unai"),
             available=False,
         )
-        self.unai_detail = self.unai_card.findChild(QWidget, "characterDetail")
+        self.unai_detail = self.unai_card.findChild(QLabel, "characterDetail")
         cards.addWidget(self.unai_card)
+        self.braian_card, self.braian_button = self._make_card(
+            "Braian",
+            "Su aventura todavía se está preparando.",
+            "PRÓXIMAMENTE",
+            None,
+            available=False,
+        )
+        cards.addWidget(self.braian_card)
         cards.addStretch(1)
         layout.addLayout(cards)
         layout.addStretch(1)
+        footer = QHBoxLayout()
+        footer.addStretch(1)
+        self.statistics_button = QPushButton("VER ESTADÍSTICAS")
+        self.statistics_button.setObjectName("characterAction")
+        self.statistics_button.clicked.connect(self.statistics_requested.emit)
+        footer.addWidget(self.statistics_button)
+        layout.addLayout(footer)
 
     def set_available_modes(self, modes):
         self.leire_button.setEnabled(0 in modes)

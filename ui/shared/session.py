@@ -1,14 +1,15 @@
 """Métricas del jugador y persistencia CSV, independientes de Qt y de la física."""
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from math import isfinite
 from time import perf_counter
 from typing import Callable
 from uuid import uuid4
 
 from data import PROGRESS_COLUMNS
-from ui.shared.functions import RESISTANCE_CANDIDATES
+from ui.shared.functions import BULB_POWER_CANDIDATES, RESISTANCE_CANDIDATES
 
-CATALOG = {"R": RESISTANCE_CANDIDATES}
+CATALOG = {"R": RESISTANCE_CANDIDATES, "B": BULB_POWER_CANDIDATES}
 
 
 @dataclass
@@ -22,7 +23,7 @@ class GameSession:
     difficulty: int
     device: str
     clock: Callable[[], float] = field(default=perf_counter, repr=False)
-    changes: dict = field(default_factory=lambda: {"R": 0, "C": 0})
+    changes: dict = field(default_factory=lambda: {"R": 0, "C": 0, "B": 0, "P": 0})
     attempts: int = 0
     finished: float | None = None
     paused_at: float | None = field(default=None, init=False)
@@ -54,7 +55,8 @@ class GameSession:
 
     def change(self, kind: str, old: float, new: float) -> bool:
         """Rechaza valores fuera del catálogo; no cuenta reseleccionar la misma pieza."""
-        if kind not in CATALOG or new not in CATALOG[kind]:
+        valid_parameter = kind == "P" and isfinite(new) and new > 0
+        if not valid_parameter and (kind not in CATALOG or new not in CATALOG[kind]):
             raise ValueError("El componente debe pertenecer al catálogo del nivel.")
         if self.finished is not None or old == new:
             return False
@@ -68,5 +70,7 @@ class GameSession:
         return dict(zip(PROGRESS_COLUMNS, [
             self.identifier, datetime.now(timezone.utc).isoformat(),
             self.difficulty, self.device, round(self.elapsed, 3),
-            self.changes["R"], self.changes["C"], self.total_changes, self.attempts,
+            self.changes["R"] + self.changes["B"] + self.changes["P"],
+            self.changes["C"],
+            self.total_changes, self.attempts,
         ]))

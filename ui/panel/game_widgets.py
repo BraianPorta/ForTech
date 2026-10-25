@@ -35,9 +35,9 @@ class ComponentItem(QGraphicsObject):
 
     clicked = Signal(str)
 
-    def __init__(self, identifier: str, value: float, label: str):
+    def __init__(self, identifier: str, value: float, label: str, unit: str = "Ω"):
         super().__init__()
-        self.identifier, self.value, self.label = identifier, value, label
+        self.identifier, self.value, self.label, self.unit = identifier, value, label, unit
         self.display_value = value
         self.active = False
         self.hovering = False
@@ -45,16 +45,16 @@ class ComponentItem(QGraphicsObject):
         self.animations = None
         self.setAcceptedMouseButtons(Qt.MouseButton.LeftButton)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setToolTip("Seleccionar y editar resistencia")
+        self.setToolTip("Seleccionar y editar componente")
 
     def boundingRect(self) -> QRectF:
-        return QRectF(-82, -55, 164, 115)
+        return QRectF(-82, -58, 164, 116)
 
     def paint(self, painter: QPainter, _option, _widget=None):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         ink = QColor("#66518a")
         accent = QColor("#a6dfcf")
-        rect = QRectF(-77, -49, 154, 101)
+        rect = QRectF(-77, -50, 154, 100)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor("#b2b6af"))
         painter.drawRoundedRect(rect.translated(0, 7), 19, 19)
@@ -67,20 +67,30 @@ class ComponentItem(QGraphicsObject):
         painter.setPen(QPen(QColor("#ffffff"), 3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
         painter.drawLine(QPointF(-56, -40), QPointF(42, -40))
         painter.setPen(QPen(ink, 3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-        path = QPainterPath(QPointF(-51, -4))
-        path.lineTo(-38, -4)
-        for i in range(8):
-            path.lineTo(-30 + i * 8, -14 if i % 2 == 0 else 6)
-        path.lineTo(38, -4)
-        path.lineTo(51, -4)
-        painter.drawPath(path)
-        painter.setFont(QFont("DejaVu Sans", 8, QFont.Weight.Bold))
-        painter.drawText(QRectF(-68, -35, 136, 17), Qt.AlignmentFlag.AlignCenter, self.label)
+        if self.unit == "W":
+            painter.setBrush(QColor("#fff5c2"))
+            painter.drawEllipse(QRectF(-13, -23, 26, 26))
+            painter.drawLine(QPointF(-9, 7), QPointF(9, 7))
+            painter.drawLine(QPointF(-7, 12), QPointF(7, 12))
+            for start, end in (
+                (QPointF(0, -32), QPointF(0, -27)),
+                (QPointF(-25, -20), QPointF(-21, -18)),
+                (QPointF(25, -20), QPointF(21, -18)),
+            ):
+                painter.drawLine(start, end)
+        else:
+            path = QPainterPath(QPointF(-51, 0))
+            path.lineTo(-38, 0)
+            for i in range(8):
+                path.lineTo(-30 + i * 8, -10 if i % 2 == 0 else 10)
+            path.lineTo(38, 0)
+            path.lineTo(51, 0)
+            painter.drawPath(path)
         painter.setFont(QFont("DejaVu Sans", 12, QFont.Weight.Bold))
         painter.drawText(
-            QRectF(-73, 20, 146, 26),
+            QRectF(-73, 19, 146, 26),
             Qt.AlignmentFlag.AlignCenter,
-            f"{self.display_value:g} Ω",
+            f"{self.display_value:g} {self.unit}",
         )
 
     def mousePressEvent(self, event):
@@ -131,7 +141,7 @@ class ComponentItem(QGraphicsObject):
 
 
 class CircuitView(QGraphicsView):
-    """Circuito dinámico de ramas en paralelo con resistencias en serie."""
+    """Circuito dinámico de ramas en paralelo con componentes en serie."""
 
     selected = Signal(str)
 
@@ -153,10 +163,10 @@ class CircuitView(QGraphicsView):
         self.animation_timer.timeout.connect(self.animate_field)
         self.animation_timer.start()
 
-    def configure(self, rows: list[list[tuple[str, str, float]]]) -> None:
+    def configure(self, rows: list[list[tuple[str, str, float, str]]]) -> None:
         self.scene_model.clear()
         self.component_items.clear()
-        self.rows = [[identifier for identifier, _label, _value in row] for row in rows]
+        self.rows = [[identifier for identifier, _label, _value, _unit in row] for row in rows]
         maximum_components = max(len(row) for row in rows)
         right_rail = 390 + (maximum_components - 1) * 165
         height = max(300, 140 + (len(rows) - 1) * 115)
@@ -165,8 +175,8 @@ class CircuitView(QGraphicsView):
         self.scene_model.setSceneRect(0, 0, right_rail + 80, height)
         for row_index, row in enumerate(rows):
             y = self.branch_y[row_index]
-            for component_index, (identifier, label, value) in enumerate(row):
-                item = ComponentItem(identifier, value, label)
+            for component_index, (identifier, label, value, unit) in enumerate(row):
+                item = ComponentItem(identifier, value, label, unit)
                 item.setPos(220 + component_index * 165, y)
                 item.clicked.connect(self.select)
                 self.scene_model.addItem(item)
