@@ -19,6 +19,7 @@ class WidgetMotion(QObject):
     def reset(self):
         """Detiene una animación y restaura el estado visible e interactivo."""
         if self.group is not None:
+            # El grupo puede seguir activo si una nueva transición interrumpe la anterior.
             self.group.stop()
             self.group.deleteLater()
             self.group = None
@@ -41,6 +42,8 @@ class WidgetMotion(QObject):
         fade.setEasingCurve(QEasingCurve.Type.OutCubic)
         group.addAnimation(fade)
         if distance:
+            # El desplazamiento y el fundido se ejecutan juntos, con el widget
+            # terminando en la posición que tenía antes de empezar la animación.
             slide = QPropertyAnimation(target, b"pos")
             slide.setStartValue(destination + QPoint(0, distance))
             slide.setEndValue(destination)
@@ -54,6 +57,7 @@ class WidgetMotion(QObject):
         """Desvanece y oculta el widget tras finalizar la animación."""
         if not self.widget.isVisible() or not self.widget.isEnabled():
             return
+        # Guarda la opacidad actual antes de resetear para no provocar un salto visual.
         opacity = self.effect.opacity()
         self.reset()
         self.widget.setEnabled(False)
@@ -64,6 +68,7 @@ class WidgetMotion(QObject):
         fade.setDuration(140)
         fade.setEasingCurve(QEasingCurve.Type.InCubic)
         group.addAnimation(fade)
+        # El callback permite ejecutar una acción al terminar; por defecto se oculta.
         group.finished.connect(on_finished if on_finished is not None else self.widget.hide)
         self.group = group
         group.start()
@@ -92,6 +97,7 @@ class SceneTransition(QWidget):
     def play(self, change=None):
         """Cubre la escena, ejecuta el cambio y revela el nuevo contenido."""
         if self.group is not None:
+            # Evita que dos transiciones simultáneas compitan por la opacidad de la capa.
             self.group.stop()
             self.group.deleteLater()
         self.setGeometry(self.parentWidget().rect())
@@ -99,6 +105,8 @@ class SceneTransition(QWidget):
         self.raise_()
         group = QSequentialAnimationGroup(self)
         if change is not None:
+            # El cambio ocurre cuando la escena está cubierta, evitando mostrar
+            # el estado intermedio entre misiones.
             cover = QPropertyAnimation(self, b"shade")
             cover.setStartValue(0.0)
             cover.setEndValue(1.0)

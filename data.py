@@ -12,12 +12,16 @@ import pandas as pd
 if TYPE_CHECKING:
     from ui.shared.functions.electronic import Simulation
 
-# Columnas persistidas por cada intento completado.
+# ---------------------------------------------------------------
+# CONFIGURACIÓN Y MODELOS DE DATOS
+# ---------------------------------------------------------------
+
+# Orden estable de las columnas guardadas para cada reto completado.
 PROGRESS_COLUMNS = [
     "partida_id", "fecha_utc", "dificultad", "dispositivo", "tiempo_s",
     "cambios_r", "cambios_c", "cambios_total", "pruebas",
 ]
-# Patrones para reconocer filas y pares tipo/valor en los CSV de retos.
+# Estos patrones permiten localizar en los CSV las ramas y los pares de componentes.
 ROW_MARKER = re.compile(r"fila_(\d+)", re.IGNORECASE)
 TYPE_COLUMN = re.compile(r"tipo_(\d+)", re.IGNORECASE)
 VALUE_COLUMN = re.compile(r"valor_(\d+)", re.IGNORECASE)
@@ -48,14 +52,20 @@ class Challenge:
     result_max: float | None = None  # Límite superior inclusivo, si el objetivo es un intervalo.
 
 
+# ---------------------------------------------------------------
+# LECTURA Y VALIDACIÓN DE RETOS
+# ---------------------------------------------------------------
+
 def parseCircuit(tokens: list[str]) -> tuple[tuple[CircuitComponent, ...], ...]:
-    """Convierte los marcadores y componentes CSV en ramas de circuito."""
+    """Convierte la secuencia tipo/valor del CSV en ramas de circuito."""
     from ui.shared.functions.electronic import (
         BULB_POWER_CANDIDATES,
         BULB_RESISTANCE_CANDIDATES,
         RESISTANCE_CANDIDATES,
     )
 
+    # Cada marcador fila_X inicia una rama paralela; los componentes siguientes
+    # hasta el próximo marcador pertenecen a esa rama y van conectados en serie.
     rows: list[tuple[CircuitComponent, ...]] = []
     index = 0
     while index < len(tokens):
@@ -70,6 +80,7 @@ def parseCircuit(tokens: list[str]) -> tuple[tuple[CircuitComponent, ...], ...]:
         index += 1
         components = []
         while index < len(tokens) and ROW_MARKER.fullmatch(tokens[index]) is None:
+            # Normaliza los alias del CSV al tipo interno usado por la simulación.
             kind = tokens[index].strip().casefold()
             if index + 1 >= len(tokens) or ROW_MARKER.fullmatch(tokens[index + 1]):
                 index += 1
@@ -93,6 +104,7 @@ def parseCircuit(tokens: list[str]) -> tuple[tuple[CircuitComponent, ...], ...]:
                 value_name = "resistencias de bombilla"
             else:
                 raise ValueError(f"tipo de componente no admitido: {kind!r}")
+            # Evita que los retos carguen valores que la interfaz no permita elegir.
             if not isfinite(value) or value <= 0:
                 raise ValueError(f"los valores de {value_name} deben ser positivos y finitos")
             if value not in candidates:
@@ -116,6 +128,8 @@ def challengeColumns(frame: pd.DataFrame) -> tuple[dict, dict, list[int]]:
     missing = required - set(frame.columns)
     if missing:
         raise ValueError("Faltan columnas: " + ", ".join(sorted(missing)))
+    # Conserva el nombre real de las columnas para poder leer cada fila aunque
+    # las columnas opcionales aparezcan en distinto orden.
     type_columns = {}
     value_columns = {}
     for name in frame.columns:
@@ -128,6 +142,7 @@ def challengeColumns(frame: pd.DataFrame) -> tuple[dict, dict, list[int]]:
             value_columns[int(match.group(1))] = name
     pair_numbers = sorted(set(type_columns) | set(value_columns))
     if not pair_numbers:
+        # Los retos de fluidos pueden omitir completamente las columnas eléctricas.
         fluid_only = (
             "tipo_ejercicio" in frame.columns
             and frame["modo"].astype(str).str.strip().eq("1").all()
@@ -137,6 +152,7 @@ def challengeColumns(frame: pd.DataFrame) -> tuple[dict, dict, list[int]]:
         raise ValueError("Las columnas de circuito deben empezar en tipo_1/valor_1 y no tener saltos.")
     if pair_numbers != list(range(1, len(pair_numbers) + 1)):
         raise ValueError("Las columnas de circuito deben empezar en tipo_1/valor_1 y no tener saltos.")
+    # Exige que cada índice tenga ambas columnas para evitar componentes incompletos.
     for number in pair_numbers:
         if number not in type_columns or number not in value_columns:
             raise ValueError(f"Falta la columna tipo_{number} o valor_{number}.")
@@ -154,6 +170,7 @@ def parseChallengeRow(
     from ui.shared.functions.electronic import challengeResistance
 
     try:
+        # Los campos comunes identifican el reto y su criterio de éxito.
         try:
             difficulty = int(row["dificultad"])
         except ValueError as error:
@@ -178,6 +195,8 @@ def parseChallengeRow(
         result_unit = str(row.get("unidad_resultado", "Ω")).strip() or "Ω"
         if result_unit not in {"Ω", "W"}:
             raise ValueError("unidad_resultado debe ser Ω o W")
+        # Los objetivos por intervalo deben tener los dos límites y contener el
+        # valor de referencia; ambos extremos se consideran válidos.
         raw_min = str(row.get("resultado_min", "")).strip()
         raw_max = str(row.get("resultado_max", "")).strip()
         if bool(raw_min) != bool(raw_max):
@@ -201,6 +220,7 @@ def parseChallengeRow(
             raise ValueError("Los resultados en W requieren resultado_min y resultado_max")
         exercise_type = str(row.get("tipo_ejercicio", "")).strip()
         if mode == 1:
+            # El modo de fluidos usa su propio modelo y no admite piezas eléctricas.
             from ui.shared.functions.flow import isFlowExercise
 
             if not isFlowExercise(exercise_type):
@@ -217,6 +237,7 @@ def parseChallengeRow(
             return Challenge(
                 difficulty, mode, prompt, target, (), identifier, None, exercise_type
             )
+        # En modo eléctrico, tensión solo se admite cuando el reto incluye bombillas.
         if exercise_type:
             raise ValueError("tipo_ejercicio solo se usa en los retos del modo Unai")
         voltage = None
@@ -230,6 +251,8 @@ def parseChallengeRow(
                 raise ValueError("tension_v debe ser positivo y finito")
         tokens = []
         found_empty_pair = False
+        # Convierte las celdas de la fila a una secuencia que parseCircuit entiende:
+        # fila_1, tipo, valor, tipo, valor, fila_2, ...
         for number in pair_numbers:
             raw_kind = row[type_columns[number]]
             raw_value = row[value_columns[number]]
@@ -260,6 +283,8 @@ def parseChallengeRow(
             raise ValueError("tension_v es obligatorio para retos con bombillas")
         if not has_bulbs and voltage is not None:
             raise ValueError("tension_v solo se usa en retos con bombillas")
+        # Comprueba que el circuito declarado como solución cumple el objetivo
+        # o el intervalo antes de aceptar el reto en el catálogo.
         calculated = challengeResistance(circuit_rows, voltage)
         measured = voltage ** 2 / calculated if result_unit == "W" else calculated
         matches_target = (
@@ -278,6 +303,7 @@ def parseChallengeRow(
             result_unit=result_unit, result_min=result_min, result_max=result_max,
         )
     except (ValueError, TypeError, OverflowError) as error:
+        # Añade el archivo de origen para localizar el dato incorrecto en el CSV.
         raise ValueError(f"{path.name}: {error}") from error
 
 
@@ -288,6 +314,7 @@ def loadChallengeFile(path: Path) -> Challenge:
     Las filas del CSV pueden terminar en el último dato disponible, sin añadir
     separadores para las columnas que no usan.
     """
+    # Se leen los datos como texto para validar los valores y vacíos explícitamente.
     frame = pd.read_csv(path, encoding="utf-8-sig", dtype=str, keep_default_na=False)
     type_columns, value_columns, pair_numbers = challengeColumns(frame)
     if len(frame) != 1:
@@ -300,6 +327,7 @@ def loadChallengeFile(path: Path) -> Challenge:
 def loadChallenges(path: str | Path) -> list[Challenge]:
     """Carga retos de CSV independientes o de un CSV unificado con columna `id`."""
     source = Path(path)
+    # Una carpeta representa importaciones individuales; un archivo es el catálogo unificado.
     if source.is_dir():
         files = sorted(source.glob("*.csv"))
     else:
@@ -311,6 +339,7 @@ def loadChallenges(path: str | Path) -> list[Challenge]:
         frame = pd.read_csv(csv_path, encoding="utf-8-sig", dtype=str, keep_default_na=False)
         type_columns, value_columns, pair_numbers = challengeColumns(frame)
         if "id" in frame.columns:
+            # El catálogo unificado exige identificadores numéricos, únicos y estables.
             if frame.columns[0] != "id":
                 raise ValueError(f"{csv_path.name}: la primera columna debe ser 'id'.")
             identifiers = frame["id"].str.strip()
@@ -324,11 +353,13 @@ def loadChallenges(path: str | Path) -> list[Challenge]:
                 for _, row in frame.iterrows()
             )
         else:
+            # Cada archivo pendiente de importación debe describir un solo reto.
             if len(frame) != 1:
                 raise ValueError(f"{csv_path.name}: cada archivo de import debe contener un único reto.")
             challenges.append(parseChallengeRow(
                 frame.iloc[0], type_columns, value_columns, pair_numbers, csv_path
             ))
+    # Mantiene el orden de juego por dificultad y luego por identificador.
     return sorted(
         challenges,
         key=lambda challenge: (
@@ -338,6 +369,10 @@ def loadChallenges(path: str | Path) -> list[Challenge]:
     )
 
 
+# ---------------------------------------------------------------
+# IMPORTACIÓN Y ESCRITURA DE RETOS
+# ---------------------------------------------------------------
+
 def prepareExercises(import_path: str | Path, exercises_path: str | Path) -> Path:
     """Importa CSV individuales al archivo unificado y elimina el origen al confirmar."""
     import_dir = Path(import_path)
@@ -346,6 +381,7 @@ def prepareExercises(import_path: str | Path, exercises_path: str | Path) -> Pat
     destination_frame = None
     rewrite_existing = False
     if destination.exists():
+        # Valida primero el catálogo para no mezclar importaciones con datos dañados.
         destination_frame = pd.read_csv(
             destination, encoding="utf-8-sig", dtype=str, keep_default_na=False
         )
@@ -360,6 +396,7 @@ def prepareExercises(import_path: str | Path, exercises_path: str | Path) -> Pat
             )
         ids = destination_frame["id"].str.strip()
         if not ids.str.fullmatch(r"\d+").all():
+            # Migra catálogos antiguos asignando IDs secuenciales antes de añadir retos.
             destination_frame = destination_frame.copy()
             destination_frame["id"] = [str(index) for index in range(1, len(ids) + 1)]
             rewrite_existing = True
@@ -383,6 +420,7 @@ def prepareExercises(import_path: str | Path, exercises_path: str | Path) -> Pat
         raise ValueError(f"No hay retos en {import_dir} ni un archivo existente en {destination}.")
 
     for source in files:
+        # Valida el reto aislado antes de modificar el catálogo de destino.
         loadChallengeFile(source)
         frame = pd.read_csv(source, encoding="utf-8-sig", dtype=str, keep_default_na=False)
         if "id" in frame.columns:
@@ -409,6 +447,7 @@ def prepareExercises(import_path: str | Path, exercises_path: str | Path) -> Pat
         frame.insert(0, "id", "")
         if destination_frame is None:
             destination_frame = pd.DataFrame(columns=columns)
+        # El nuevo ID se asigna al final del catálogo; se conserva el orden previo.
         next_id = max((int(value) for value in destination_frame["id"]), default=0) + 1
         frame.loc[frame.index[0], "id"] = str(next_id)
         unified = pd.concat([destination_frame, frame], ignore_index=True).reindex(
@@ -416,6 +455,7 @@ def prepareExercises(import_path: str | Path, exercises_path: str | Path) -> Pat
         )
         writeUnifiedExercises(destination, unified)
         destination_frame = unified
+        # Borra el origen solo cuando el catálogo unificado ya se escribió y validó.
         source.unlink()
 
     return destination
@@ -426,18 +466,26 @@ def writeUnifiedExercises(destination: Path, frame: pd.DataFrame) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_suffix(".tmp")
     try:
+        # Escribe en un temporal y comprueba que el CSV completo se puede volver a leer.
         frame.to_csv(temporary, index=False, encoding="utf-8-sig")
         loadChallenges(temporary)
+        # replace evita dejar un archivo final parcialmente escrito ante un fallo.
         temporary.replace(destination)
     finally:
+        # Limpia el temporal tanto si la validación/escritura termina bien como si falla.
         temporary.unlink(missing_ok=True)
 
+
+# ---------------------------------------------------------------
+# EXPORTACIÓN DE SIMULACIONES
+# ---------------------------------------------------------------
 
 def saveSimulation(path: str | Path, result: Simulation, challenge: Challenge,
                     rows: list[list[float]]) -> None:
     """Exporta el circuito seleccionado y su resultado calculado."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    # Guarda objetivo y medición junto a cada componente, agrupado por rama.
     record = {
         "dificultad": challenge.difficulty,
         "modo": challenge.mode,
@@ -451,29 +499,43 @@ def saveSimulation(path: str | Path, result: Simulation, challenge: Challenge,
     pd.DataFrame([record]).to_csv(path, index=False, encoding="utf-8-sig")
 
 
+# ---------------------------------------------------------------
+# LECTURA Y ESCRITURA DEL PROGRESO
+# ---------------------------------------------------------------
+
 class ProgressStore:
-    """Historial de misiones resueltas, con guardado atómico y sin duplicados."""
+    """Progreso de la partida actual, con guardado atómico y sin duplicados."""
 
     def __init__(self, path: str | Path):
-        """Carga el historial existente desde la ruta indicada."""
+        """Inicia un progreso vacío para la nueva partida."""
         self.path = Path(path)
         self.records = []
-        if self.path.exists():
-            frame = pd.read_csv(self.path)
-            if "reto_id" in frame.columns and "dificultad" not in frame.columns:
-                frame = frame.rename(columns={"reto_id": "dificultad"})
-            if not set(PROGRESS_COLUMNS).issubset(frame.columns):
-                raise ValueError("El historial no tiene el formato de progreso esperado.")
-            self.records = frame[PROGRESS_COLUMNS].to_dict("records")
+        self.reset()
+
+    def reset(self) -> None:
+        """Vacía el progreso anterior al empezar una partida nueva."""
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.path.with_suffix(".tmp")
+        try:
+            # Mantiene la cabecera para que el CSV vacío conserve su formato esperado.
+            pd.DataFrame(columns=PROGRESS_COLUMNS).to_csv(
+                temporary, index=False, encoding="utf-8-sig"
+            )
+            temporary.replace(self.path)
+        finally:
+            temporary.unlink(missing_ok=True)
+        self.records = []
 
     def append(self, record: dict) -> None:
         """Añade un intento válido mediante una escritura atómica."""
+        # partida_id identifica unívocamente el intento y evita duplicarlo en el CSV.
         if any(row["partida_id"] == record["partida_id"] for row in self.records):
             return
         rows = [*self.records, record]
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.path.with_suffix(".tmp")
         try:
+            # Reescribe el historial completo en un temporal para evitar truncarlo.
             pd.DataFrame(rows, columns=PROGRESS_COLUMNS).to_csv(
                 temporary, index=False, encoding="utf-8-sig")
             temporary.replace(self.path)

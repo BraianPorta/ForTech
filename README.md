@@ -23,13 +23,13 @@ inicia ForTech.
   `data.py` valida cada archivo, lo agrega a `data/exercises/exercises.csv` con
   un `id` numérico secuencial y elimina el archivo de importación tras guardarlo.
   Ese único CSV es el que carga el juego.
-- `data/results/` guarda el progreso (`progreso.csv`), las exportaciones y las
-  estadísticas de juego.
+- `data/results/comparison/progreso.csv` guarda el avance de la partida actual;
+  se vacía al iniciar una partida nueva.
 - Al completar todas las actividades de una sesión, el juego guarda una fila
   por actividad en `data/results/session/<número>.csv`, con las columnas
   `Tiempo,Cambios,Intentos`. Al consultar las estadísticas desde la pantalla
   inicial, calcula en memoria el resumen y el estilo de cada sesión completada;
-  no genera un CSV comparativo.
+  el progreso parcial no se incluye y no se genera un CSV comparativo.
 - `ui/shared/functions/electronic.py` contiene el modelo y los cálculos eléctricos.
 - `ui/shared/functions/flow.py` contiene los datos, ecuaciones y cálculos de los ejercicios
   de mecánica de fluidos de Unai.

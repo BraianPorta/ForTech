@@ -41,11 +41,13 @@ class GameSession:
 
     def __post_init__(self):
         """Registra el instante inicial del cronómetro de la misión."""
+        # El reloj inyectable permite medir el tiempo real y probar pausas de forma determinista.
         self.started = self.clock()
 
     @property
     def elapsed(self) -> float:
         """Devuelve el tiempo activo, excluyendo pausas y respetando el fin."""
+        # Durante una pausa se usa su instante de inicio; al finalizar, el tiempo queda congelado.
         stop = self.finished
         if stop is None:
             stop = self.paused_at if self.paused_at is not None else self.clock()
@@ -53,12 +55,14 @@ class GameSession:
 
     def pause(self) -> None:
         """Detiene temporalmente el cronómetro si la misión sigue activa."""
+        # Ignora pausas repetidas para no reemplazar el inicio de la primera.
         if self.finished is None and self.paused_at is None:
             self.paused_at = self.clock()
 
     def resume(self) -> None:
         """Reanuda el cronómetro y acumula la duración de la pausa."""
         if self.finished is None and self.paused_at is not None:
+            # Se resta del tiempo transcurrido para contar solo el tiempo activo.
             self.paused_duration += self.clock() - self.paused_at
             self.paused_at = None
 
@@ -69,11 +73,13 @@ class GameSession:
 
     def change(self, kind: str, old: float | None, new: float) -> bool:
         """Valida el valor elegido y cuenta cada selección o cambio efectivo."""
+        # Los parámetros de fluidos (P) no usan catálogo, pero sí deben ser positivos y finitos.
         valid_parameter = kind == "P" and isfinite(new) and new > 0
         if not valid_parameter and (kind not in CATALOG or new not in CATALOG[kind]):
             raise ValueError("El componente debe pertenecer al catálogo del nivel.")
         if self.finished is not None or old == new:
             return False
+        # Ambas clases de bombilla comparten el mismo contador de cambios de bombilla.
         change_kind = "B" if kind == "BΩ" else kind
         self.changes[change_kind] += 1
         return True
@@ -81,7 +87,9 @@ class GameSession:
     def complete(self) -> dict:
         """Congela el tiempo y construye la fila de estadísticas de esta partida."""
         if self.finished is None:
+            # Si se completa estando en pausa, el tiempo válido termina al pausar.
             self.finished = self.paused_at if self.paused_at is not None else self.clock()
+        # La clave de cada valor coincide con el orden de columnas persistidas en data.py.
         return dict(zip(PROGRESS_COLUMNS, [
             self.identifier, datetime.now(timezone.utc).isoformat(),
             self.difficulty, self.device, round(self.elapsed, 3),

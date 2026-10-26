@@ -12,12 +12,15 @@ BASE = Path(__file__).resolve().parents[2]
 
 def configureApplication(app: QApplication) -> None:
     """Carga las fuentes y configura el tema global de la aplicación."""
+    # Registrar las fuentes desde assets evita depender de fuentes instaladas
+    # externamente y permite mantener tipografía coherente entre equipos.
     for name in ("DejaVuSans.ttf", "DejaVuSans-Bold.ttf", "DejaVuSansMono.ttf"):
         path = BASE / "assets" / "fonts" / name
         if QFontDatabase.addApplicationFont(str(path)) < 0:
             raise RuntimeError(f"No se pudo cargar la fuente {path.name}")
     app.setStyle("Fusion")
     palette = QPalette()
+    # Aplica una paleta explícita para que los controles nativos respeten el tema.
     for role, color in (
         (QPalette.ColorRole.Window, BG),
         (QPalette.ColorRole.WindowText, TEXT),
@@ -37,6 +40,7 @@ def configureApplication(app: QApplication) -> None:
 def label(text: str, kind: str = "", wrap: bool = False) -> QLabel:
     """Crea una etiqueta con un estilo semántico compartido."""
     item = QLabel(text)
+    # El nombre semántico permite que la hoja de estilos aplique variantes por función.
     item.setObjectName(kind)
     item.setWordWrap(wrap)
     return item
@@ -45,6 +49,7 @@ def label(text: str, kind: str = "", wrap: bool = False) -> QLabel:
 def card() -> tuple[QFrame, QVBoxLayout]:
     """Crea un panel con márgenes y separación comunes."""
     frame = QFrame()
+    # El objeto "panel" comparte el aspecto de las tarjetas definido en el tema.
     frame.setObjectName("panel")
     layout = QVBoxLayout(frame)
     layout.setContentsMargins(20, 18, 20, 18)

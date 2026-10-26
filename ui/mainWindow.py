@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 
 from data import ProgressStore, loadChallenges, prepareExercises
 from ui.header.header import GameHeader
-from ui.initial.startScreen import StartScreen
+from ui.start.start import StartScreen
 from ui.pauseMenu.pauseMenu import PauseMenu
 from ui.panel.circuitPanel import CircuitPanel
 from ui.panel.gameWidgets import GameBackdrop, SimulationWorker
@@ -67,7 +67,7 @@ class MainWindow(QMainWindow):
             self.progress = ProgressStore(
                 Path(progress_path)
                 if progress_path is not None
-                else data_dir / "results" / "progreso.csv"
+                else data_dir / "results" / "comparison" / "progreso.csv"
             )
             self.history = list(self.progress.records)
         except (OSError, ValueError) as error:
