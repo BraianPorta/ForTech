@@ -6,10 +6,11 @@ from PySide6.QtWidgets import QApplication, QFrame, QLabel, QVBoxLayout
 
 from ui.shared.style import APPLICATION_STYLE, BG, PANEL, TEXT, TEAL
 
+# Raíz del proyecto usada para localizar recursos compartidos.
 BASE = Path(__file__).resolve().parents[2]
 
 
-def configure_application(app: QApplication) -> None:
+def configureApplication(app: QApplication) -> None:
     """Carga las fuentes y configura el tema global de la aplicación."""
     for name in ("DejaVuSans.ttf", "DejaVuSans-Bold.ttf", "DejaVuSansMono.ttf"):
         path = BASE / "assets" / "fonts" / name

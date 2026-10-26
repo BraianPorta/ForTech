@@ -7,9 +7,18 @@ from typing import Callable
 from uuid import uuid4
 
 from data import PROGRESS_COLUMNS
-from ui.shared.functions import BULB_POWER_CANDIDATES, RESISTANCE_CANDIDATES
+from ui.shared.functions.electronic import (
+    BULB_POWER_CANDIDATES,
+    BULB_RESISTANCE_CANDIDATES,
+    RESISTANCE_CANDIDATES,
+)
 
-CATALOG = {"R": RESISTANCE_CANDIDATES, "B": BULB_POWER_CANDIDATES}
+# Catálogos usados para validar las elecciones de los componentes.
+CATALOG = {
+    "R": RESISTANCE_CANDIDATES,
+    "B": BULB_POWER_CANDIDATES,
+    "BΩ": BULB_RESISTANCE_CANDIDATES,
+}
 
 
 @dataclass
@@ -31,36 +40,42 @@ class GameSession:
     identifier: str = field(default_factory=lambda: str(uuid4()))
 
     def __post_init__(self):
+        """Registra el instante inicial del cronómetro de la misión."""
         self.started = self.clock()
 
     @property
     def elapsed(self) -> float:
+        """Devuelve el tiempo activo, excluyendo pausas y respetando el fin."""
         stop = self.finished
         if stop is None:
             stop = self.paused_at if self.paused_at is not None else self.clock()
         return max(0.0, stop - self.started - self.paused_duration)
 
     def pause(self) -> None:
+        """Detiene temporalmente el cronómetro si la misión sigue activa."""
         if self.finished is None and self.paused_at is None:
             self.paused_at = self.clock()
 
     def resume(self) -> None:
+        """Reanuda el cronómetro y acumula la duración de la pausa."""
         if self.finished is None and self.paused_at is not None:
             self.paused_duration += self.clock() - self.paused_at
             self.paused_at = None
 
     @property
-    def total_changes(self) -> int:
+    def totalChanges(self) -> int:
+        """Suma los cambios realizados en todos los tipos de componente."""
         return sum(self.changes.values())
 
-    def change(self, kind: str, old: float, new: float) -> bool:
-        """Rechaza valores fuera del catálogo; no cuenta reseleccionar la misma pieza."""
+    def change(self, kind: str, old: float | None, new: float) -> bool:
+        """Valida el valor elegido y cuenta cada selección o cambio efectivo."""
         valid_parameter = kind == "P" and isfinite(new) and new > 0
         if not valid_parameter and (kind not in CATALOG or new not in CATALOG[kind]):
             raise ValueError("El componente debe pertenecer al catálogo del nivel.")
         if self.finished is not None or old == new:
             return False
-        self.changes[kind] += 1
+        change_kind = "B" if kind == "BΩ" else kind
+        self.changes[change_kind] += 1
         return True
 
     def complete(self) -> dict:
@@ -72,5 +87,5 @@ class GameSession:
             self.difficulty, self.device, round(self.elapsed, 3),
             self.changes["R"] + self.changes["B"] + self.changes["P"],
             self.changes["C"],
-            self.total_changes, self.attempts,
+            self.totalChanges, self.attempts,
         ]))

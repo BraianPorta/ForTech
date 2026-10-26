@@ -11,21 +11,26 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ui.shared.flow import FLOW_EXERCISES, FlowExercise
+from ui.shared.functions.flow import FLOW_EXERCISES, FlowExercise
 
 
 class FlowDiagram(QWidget):
+    """Dibuja el esquema del tubo según el tipo de ejercicio."""
+
     def __init__(self, parent=None):
+        """Inicializa el esquema de flujo predeterminado."""
         super().__init__(parent)
         self.diagram = "flow"
-        self.setMinimumHeight(112)
-        self.setMaximumHeight(128)
+        self.setMinimumHeight(130)
+        self.setMaximumHeight(148)
 
-    def set_diagram(self, diagram: str):
+    def setDiagram(self, diagram: str):
+        """Selecciona el esquema que se dibujará y refresca el widget."""
         self.diagram = diagram
         self.update()
 
     def paintEvent(self, _event):
+        """Dibuja el tubo, el flujo y las anotaciones del ejercicio."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.fillRect(self.rect(), QColor("#f7faff"))
@@ -51,14 +56,14 @@ class FlowDiagram(QWidget):
         painter.drawEllipse(QRectF(left - 8, center_y - 22, 16, 44))
         painter.drawEllipse(QRectF(right - 8, center_y - 22, 16, 44))
         painter.setPen(QColor("#43536b"))
-        painter.setFont(QFont("DejaVu Sans", 9, QFont.Weight.Bold))
+        painter.setFont(QFont("DejaVu Sans", 11, QFont.Weight.Bold))
         if self.diagram == "heat":
             painter.setPen(QPen(QColor("#ef7564"), 3, Qt.PenStyle.SolidLine,
                                 Qt.PenCapStyle.RoundCap))
             for x in (self.width() * 0.3, self.width() * 0.5, self.width() * 0.7):
-                painter.drawLine(QPointF(x, center_y - 38), QPointF(x + 5, center_y - 53))
+                painter.drawLine(QPointF(x, center_y - 29), QPointF(x + 5, center_y - 43))
             painter.setPen(QColor("#d85d5d"))
-            painter.drawText(QRectF(left, center_y - 58, right - left, 16),
+            painter.drawText(QRectF(left, center_y - 65, right - left, 16),
                             Qt.AlignmentFlag.AlignCenter, "Calor disipado Q")
             painter.setPen(QColor("#43536b"))
             painter.drawText(QRectF(left, center_y + 25, right - left, 20),
@@ -88,23 +93,25 @@ class FlowDiagram(QWidget):
 
 
 class FlowExercisePanel(QWidget):
-    parameter_changed = Signal(str, float, float)
+    """Muestra el enunciado científico y recoge parámetros seleccionables."""
+
+    parameter_changed = Signal(str, object, float)
 
     def __init__(self, parent=None):
+        """Construye el contexto, el diagrama y las listas de parámetros."""
         super().__init__(parent)
         self.exercise_type = ""
-        self.values: dict[str, float] = {}
+        self.values: dict[str, float | None] = {}
         self.selectors: dict[str, QComboBox] = {}
         self.setStyleSheet("""
             QFrame#flowCard { background: #ffffff; border: 1px solid #dce5ef; border-radius: 12px; }
-            QLabel#flowTitle { color: #392d57; font-size: 19px; font-weight: 700; }
-            QLabel#flowPrompt { color: #343d4b; font-size: 13px; }
-            QLabel#flowFormula { color: #34465d; background: #eef6fd; border-radius: 10px; padding: 9px; font-size: 12px; }
-            QLabel#flowConstants { color: #536174; font-size: 11px; }
-            QLabel#flowObjective { color: #176c9b; font-weight: 700; font-size: 12px; }
-            QLabel#flowParameter { color: #6042a6; font-size: 11px; font-weight: 700; }
-            QLabel#flowStatus { color: #6042a6; font-size: 12px; font-weight: 700; }
-            QComboBox#flowSelector { background: #ffffff; border: 2px solid #c7b7e4; border-radius: 9px; padding: 7px 10px; color: #392d57; font-size: 14px; min-width: 105px; }
+            QLabel#flowTitle { color: #392d57; font-size: 21px; font-weight: 700; }
+            QLabel#flowPrompt { color: #343d4b; font-size: 15px; }
+            QLabel#flowFormula { color: #34465d; background: #eef6fd; border-radius: 10px; padding: 10px; font-size: 14px; }
+            QLabel#flowConstants { color: #536174; font-size: 13px; }
+            QLabel#flowObjective { color: #176c9b; font-weight: 700; font-size: 14px; }
+            QLabel#flowStatus { color: #6042a6; font-size: 14px; font-weight: 700; }
+            QComboBox#flowSelector { background: #ffffff; border: 2px solid #c7b7e4; border-radius: 9px; padding: 8px 11px; color: #392d57; font-size: 16px; min-width: 105px; }
             QComboBox#flowSelector:focus { border-color: #7252ba; }
             QComboBox#flowSelector:disabled { color: #898391; background: #f0edf4; }
         """)
@@ -146,11 +153,6 @@ class FlowExercisePanel(QWidget):
         root.addWidget(formula_card)
 
         choices = QHBoxLayout()
-        self.choice_title = QLabel("AJUSTA LOS BLOQUES")
-        self.choice_title.setStyleSheet(
-            "color: #6042a6; font-size: 11px; font-weight: 700; letter-spacing: 1px;"
-        )
-        choices.addWidget(self.choice_title)
         choices.addStretch()
         self.status = QLabel()
         self.status.setObjectName("flowStatus")
@@ -162,7 +164,8 @@ class FlowExercisePanel(QWidget):
         root.addLayout(self.parameters_layout)
         root.addStretch(1)
 
-    def set_exercise(self, exercise_type: str, prompt: str | None = None):
+    def setExercise(self, exercise_type: str, prompt: str | None = None):
+        """Carga el contenido y los controles del ejercicio indicado."""
         if exercise_type not in FLOW_EXERCISES:
             raise ValueError(f"Tipo de ejercicio no admitido: {exercise_type!r}")
         exercise: FlowExercise = FLOW_EXERCISES[exercise_type]
@@ -172,9 +175,9 @@ class FlowExercisePanel(QWidget):
         self.objective.setText(exercise.objective)
         self.formula.setText(exercise.formula)
         self.constants.setText(exercise.constants)
-        self.diagram.set_diagram(exercise.diagram)
+        self.diagram.setDiagram(exercise.diagram)
         self.status.clear()
-        self.values = {parameter.key: parameter.initial for parameter in exercise.parameters}
+        self.values = {parameter.key: None for parameter in exercise.parameters}
         self.selectors.clear()
         while self.parameters_layout.count():
             item = self.parameters_layout.takeAt(0)
@@ -185,26 +188,26 @@ class FlowExercisePanel(QWidget):
             card = QFrame()
             card.setObjectName("flowCard")
             card_layout = QVBoxLayout(card)
-            card_layout.setContentsMargins(10, 7, 10, 8)
-            card_layout.setSpacing(4)
-            label = QLabel(parameter.label)
-            label.setObjectName("flowParameter")
+            card_layout.setContentsMargins(10, 8, 10, 8)
             selector = QComboBox()
             selector.setObjectName("flowSelector")
+            selector.setPlaceholderText("Selecciona")
             for option in parameter.options:
                 selector.addItem(f"{option:g} {parameter.unit}", option)
-            selector.setCurrentIndex(parameter.options.index(parameter.initial))
+            selector.setCurrentIndex(-1)
             selector.currentIndexChanged.connect(
                 lambda _index, key=parameter.key, control=selector:
-                    self._selection_changed(key, control)
+                    self.selectionChanged(key, control)
             )
-            card_layout.addWidget(label)
             card_layout.addWidget(selector)
             self.parameters_layout.addWidget(card, 1)
             self.selectors[parameter.key] = selector
         self.parameters_layout.addStretch(1)
 
-    def _selection_changed(self, key: str, selector: QComboBox):
+    def selectionChanged(self, key: str, selector: QComboBox):
+        """Actualiza el parámetro seleccionado y notifica el cambio efectivo."""
+        if selector.currentIndex() < 0:
+            return
         previous = self.values[key]
         selected = float(selector.currentData())
         if previous == selected:
@@ -212,6 +215,7 @@ class FlowExercisePanel(QWidget):
         self.values[key] = selected
         self.parameter_changed.emit(key, previous, selected)
 
-    def set_parameters_enabled(self, enabled: bool):
+    def setParametersEnabled(self, enabled: bool):
+        """Activa o desactiva los controles de parámetros."""
         for selector in self.selectors.values():
             selector.setEnabled(enabled)

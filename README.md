@@ -28,10 +28,10 @@ inicia ForTech.
 - Al completar todas las actividades de una sesión, el juego guarda una fila
   por actividad en `data/results/session/<número>.csv`, con las columnas
   `Tiempo,Cambios,Intentos`. Al consultar las estadísticas desde la pantalla
-  inicial, genera `data/results/comparison/comparison.csv` con el resumen y el
-  estilo de cada sesión completada.
-- `ui/shared/functions.py` contiene el modelo y los cálculos eléctricos.
-- `ui/shared/flow.py` contiene los datos, ecuaciones y cálculos de los ejercicios
+  inicial, calcula en memoria el resumen y el estilo de cada sesión completada;
+  no genera un CSV comparativo.
+- `ui/shared/functions/electronic.py` contiene el modelo y los cálculos eléctricos.
+- `ui/shared/functions/flow.py` contiene los datos, ecuaciones y cálculos de los ejercicios
   de mecánica de fluidos de Unai.
 - El panel del circuito llama a `simulate` con los componentes elegidos por el
   jugador. Calcula la resistencia equivalente, convirtiendo la potencia de las
@@ -59,14 +59,22 @@ modo,dificultad,enunciado,resultado,tipo_1,valor_1,tipo_2,valor_2,tipo_3,valor_3
 Cada `fila_X` es una rama en paralelo; sus componentes se conectan en serie.
 Admite hasta `fila_3`. Los tipos `ohm` y `resistencia` usan el catálogo
 330, 680, 1000, 1500, 2200 y 3300 Ω. Los tipos `bombilla_w`, `bombilla` y
-`bulb_w` usan el catálogo de 3, 6 y 12 W y requieren la columna opcional
-`tension_v`; el juego convierte potencia a resistencia con `R = V²/P`.
+`bulb_w` usan el catálogo de 3, 6 y 12 W
+y requieren la columna opcional `tension_v`; el juego convierte potencia a
+resistencia con `R = V²/P`. El tipo `bombilla_ohm` usa el catálogo de 12, 24 y
+48 Ω como resistencias de bombillas. Para evaluar la potencia del circuito, se
+suman primero las resistencias en serie y se aplica `P = V²/R`.
+Opcionalmente, `unidad_resultado` puede ser `W` y `resultado_min`/
+`resultado_max` definen un intervalo de éxito inclusivo; `resultado` indica el
+valor objetivo de referencia dentro de ese intervalo.
+Cuando se indica `tension_v`, el esquema del circuito también muestra la pila
+con ese voltaje.
 Para Leire, `resultado` debe coincidir con la resistencia equivalente calculada.
 Sus retos usan `modo=0`. Los ejercicios de Unai usan `modo=1`, dejan vacíos los
 pares `tipo_X`/`valor_X` (o pueden omitir esas columnas) y especifican
 `tipo_ejercicio` como `laminar_flow`, `heat_transfer` o `pressure_loss`. Los
 parámetros seleccionables, sus opciones, las constantes y las fórmulas se definen en
-`ui/shared/flow.py`; el panel muestra el esquema y el contexto del ejercicio y
+`ui/shared/functions/flow.py`; el panel muestra el esquema y el contexto del ejercicio y
 permite cambiar los parámetros desde una fila de bloques. Un tipo final sin
 valor se ignora. En esos ejercicios, `resultado` conserva un valor numérico de
 referencia; el criterio de éxito (régimen laminar o intervalo de transferencia/

@@ -3,13 +3,14 @@ import sys
 
 
 def main() -> int:
+    """Configura Qt, inicia la ventana principal y devuelve el código de salida."""
     from PySide6.QtCore import QCoreApplication, QEvent
     from PySide6.QtWidgets import QApplication
     from ui import MainWindow
-    from ui.shared.widgets import configure_application
+    from ui.shared.widgets import configureApplication
 
     app = QApplication(sys.argv)
-    configure_application(app)
+    configureApplication(app)
     window = MainWindow()
     window.show()
     exit_code = app.exec()

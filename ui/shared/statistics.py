@@ -8,7 +8,7 @@ y pone nombre a cada grupo según su estilo de juego.
 Uso:
     1. Cada CSV de data/results/session debe tener una fila por nivel y las columnas
        Tiempo, Cambios e Intentos.
-    2. La comparación se guarda en data/results/comparison/comparison.csv.
+    2. El resumen se calcula al abrir las estadísticas y se muestra en la interfaz.
 """
 
 # ---------------------------------------------------------------
@@ -25,27 +25,26 @@ from sklearn.cluster import KMeans                # algoritmo de agrupamiento
 from sklearn.metrics import silhouette_score      # medida de calidad de los grupos
 from sklearn.decomposition import PCA             # reducción a 2 dimensiones (solo para dibujar)
 
+# Raíz del proyecto y carpeta de persistencia de sesiones.
 BASE = Path(__file__).resolve().parents[2]
-# Carpetas donde se guardan los CSV de sesiones y de comparación.
+# Carpeta donde se guardan los CSV de sesiones.
 CARPETA = BASE / "data" / "results" / "session"
-CARPETA_COMPARACION = BASE / "data" / "results" / "comparison"
 
 # ---------------------------------------------------------------
 # 2. LEER LOS CSV Y RESUMIR CADA SESIÓN
 # ---------------------------------------------------------------
-# Nombres de las columnas que se usan de cada CSV (una fila por nivel)
+# Nombres de las columnas leídas por nivel y usadas en el resumen comparativo.
 COL_TIEMPO   = "Tiempo"
 COL_CAMBIOS  = "Cambios"
 COL_INTENTOS = "Intentos"
 VARS = ["tiempo_nivel", "cambios_nivel", "intentos_nivel"]
-COLUMNAS_COMPARACION = ["sesion", "n_niveles", *VARS, "grupo", "estilo"]
 
 class SessionStatistics:
-    """Guarda las actividades completadas y compara las sesiones completas."""
+    """Guarda las actividades completadas y compara las sesiones en memoria."""
 
-    def __init__(self, session_dir=CARPETA, comparison_dir=CARPETA_COMPARACION):
+    def __init__(self, session_dir=CARPETA):
+        """Guarda la carpeta donde se almacenan los datos de cada sesión."""
         self.session_dir = Path(session_dir)
-        self.comparison_dir = Path(comparison_dir)
 
     def begin_session(self) -> int:
         """Reserva un número para la sesión que se inicia."""
@@ -99,7 +98,7 @@ class SessionStatistics:
         return destination
 
     def build_comparison(self):
-        """Resume las sesiones completas y guarda el CSV comparativo."""
+        """Resume las sesiones completas para presentarlas en la interfaz."""
         # Lista ordenada de todos los CSV de la carpeta.
         rutas = sorted(
             glob.glob(os.path.join(str(self.session_dir), "*.csv")),
@@ -243,21 +242,10 @@ class SessionStatistics:
         print(f"{len(resumen)} sesiones cargadas")
         print(resumen)
 
-        # Guarda los datos comparativos usados por la gráfica.
-        self.comparison_dir.mkdir(parents=True, exist_ok=True)
-        destino = self.comparison_dir / "comparison.csv"
-        temporal = destino.with_suffix(".tmp")
-        try:
-            resumen.reindex(columns=COLUMNAS_COMPARACION).to_csv(
-                temporal, index=False, encoding="utf-8-sig"
-            )
-            temporal.replace(destino)
-        finally:
-            temporal.unlink(missing_ok=True)
-
         # ---------------------------------------------------------------
         # 5. GRÁFICAS
         # ---------------------------------------------------------------
+        plt.rcParams["toolbar"] = "None"
         # Una figura con dos gráficas, una al lado de la otra
         _, axs = plt.subplots(1, 2, figsize=(13, 5))
 

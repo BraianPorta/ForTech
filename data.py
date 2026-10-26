@@ -10,12 +10,14 @@ from typing import TYPE_CHECKING
 import pandas as pd
 
 if TYPE_CHECKING:
-    from ui.shared.functions import Simulation
+    from ui.shared.functions.electronic import Simulation
 
+# Columnas persistidas por cada intento completado.
 PROGRESS_COLUMNS = [
     "partida_id", "fecha_utc", "dificultad", "dispositivo", "tiempo_s",
     "cambios_r", "cambios_c", "cambios_total", "pruebas",
 ]
+# Patrones para reconocer filas y pares tipo/valor en los CSV de retos.
 ROW_MARKER = re.compile(r"fila_(\d+)", re.IGNORECASE)
 TYPE_COLUMN = re.compile(r"tipo_(\d+)", re.IGNORECASE)
 VALUE_COLUMN = re.compile(r"valor_(\d+)", re.IGNORECASE)
@@ -41,10 +43,18 @@ class Challenge:
     identifier: str = ""
     voltage: float | None = None
     exercise_type: str = ""
+    result_unit: str = "Ω"  # Unidad de medida para el objetivo del reto.
+    result_min: float | None = None  # Límite inferior inclusivo, si el objetivo es un intervalo.
+    result_max: float | None = None  # Límite superior inclusivo, si el objetivo es un intervalo.
 
 
-def _parse_circuit(tokens: list[str]) -> tuple[tuple[CircuitComponent, ...], ...]:
-    from ui.shared.functions import BULB_POWER_CANDIDATES, RESISTANCE_CANDIDATES
+def parseCircuit(tokens: list[str]) -> tuple[tuple[CircuitComponent, ...], ...]:
+    """Convierte los marcadores y componentes CSV en ramas de circuito."""
+    from ui.shared.functions.electronic import (
+        BULB_POWER_CANDIDATES,
+        BULB_RESISTANCE_CANDIDATES,
+        RESISTANCE_CANDIDATES,
+    )
 
     rows: list[tuple[CircuitComponent, ...]] = []
     index = 0
@@ -77,6 +87,10 @@ def _parse_circuit(tokens: list[str]) -> tuple[tuple[CircuitComponent, ...], ...
                 component_kind = "bombilla"
                 candidates = BULB_POWER_CANDIDATES
                 value_name = "potencias de bombilla"
+            elif kind in {"bombilla_ohm", "bulb_ohm"}:
+                component_kind = "bombilla_ohm"
+                candidates = BULB_RESISTANCE_CANDIDATES
+                value_name = "resistencias de bombilla"
             else:
                 raise ValueError(f"tipo de componente no admitido: {kind!r}")
             if not isfinite(value) or value <= 0:
@@ -96,7 +110,8 @@ def _parse_circuit(tokens: list[str]) -> tuple[tuple[CircuitComponent, ...], ...
     return tuple(rows)
 
 
-def _challenge_columns(frame: pd.DataFrame) -> tuple[dict, dict, list[int]]:
+def challengeColumns(frame: pd.DataFrame) -> tuple[dict, dict, list[int]]:
+    """Valida las columnas obligatorias y encuentra pares tipo/valor contiguos."""
     required = {"dificultad", "modo", "enunciado", "resultado"}
     missing = required - set(frame.columns)
     if missing:
@@ -128,14 +143,15 @@ def _challenge_columns(frame: pd.DataFrame) -> tuple[dict, dict, list[int]]:
     return type_columns, value_columns, pair_numbers
 
 
-def _parse_challenge_row(
+def parseChallengeRow(
     row: pd.Series,
     type_columns: dict,
     value_columns: dict,
     pair_numbers: list[int],
     path: Path,
 ) -> Challenge:
-    from ui.shared.functions import challenge_resistance
+    """Valida una fila del CSV y crea el reto eléctrico o de fluidos."""
+    from ui.shared.functions.electronic import challengeResistance
 
     try:
         try:
@@ -156,14 +172,38 @@ def _parse_challenge_row(
         try:
             target = float(row["resultado"])
         except ValueError as error:
-            raise ValueError("resultado debe ser una resistencia en ohmios") from error
+            raise ValueError("resultado debe ser un valor numérico") from error
         if not isfinite(target) or target <= 0:
             raise ValueError("resultado debe ser positivo y finito")
+        result_unit = str(row.get("unidad_resultado", "Ω")).strip() or "Ω"
+        if result_unit not in {"Ω", "W"}:
+            raise ValueError("unidad_resultado debe ser Ω o W")
+        raw_min = str(row.get("resultado_min", "")).strip()
+        raw_max = str(row.get("resultado_max", "")).strip()
+        if bool(raw_min) != bool(raw_max):
+            raise ValueError("resultado_min y resultado_max deben indicarse juntos")
+        result_min = result_max = None
+        if raw_min:
+            try:
+                result_min, result_max = float(raw_min), float(raw_max)
+            except ValueError as error:
+                raise ValueError("resultado_min y resultado_max deben ser numéricos") from error
+            if (
+                not isfinite(result_min)
+                or not isfinite(result_max)
+                or result_min <= 0
+                or result_max < result_min
+            ):
+                raise ValueError("El intervalo de resultado debe ser positivo y estar ordenado")
+            if not result_min <= target <= result_max:
+                raise ValueError("resultado debe estar dentro del intervalo indicado")
+        if result_unit == "W" and (result_min is None or result_max is None):
+            raise ValueError("Los resultados en W requieren resultado_min y resultado_max")
         exercise_type = str(row.get("tipo_ejercicio", "")).strip()
         if mode == 1:
-            from ui.shared.flow import is_flow_exercise
+            from ui.shared.functions.flow import isFlowExercise
 
-            if not is_flow_exercise(exercise_type):
+            if not isFlowExercise(exercise_type):
                 raise ValueError("tipo_ejercicio debe identificar un ejercicio de fluidos válido")
             if any(
                 str(row[type_columns[number]]).strip()
@@ -210,9 +250,9 @@ def _parse_challenge_row(
             tokens.append(kind)
             if value:
                 tokens.append(value)
-        circuit_rows = _parse_circuit(tokens)
+        circuit_rows = parseCircuit(tokens)
         has_bulbs = any(
-            component.kind == "bombilla"
+            component.kind in {"bombilla", "bombilla_ohm"}
             for branch in circuit_rows
             for component in branch
         )
@@ -220,19 +260,28 @@ def _parse_challenge_row(
             raise ValueError("tension_v es obligatorio para retos con bombillas")
         if not has_bulbs and voltage is not None:
             raise ValueError("tension_v solo se usa en retos con bombillas")
-        calculated = challenge_resistance(circuit_rows, voltage)
-        if not isclose(calculated, target, rel_tol=1e-6, abs_tol=1e-6):
+        calculated = challengeResistance(circuit_rows, voltage)
+        measured = voltage ** 2 / calculated if result_unit == "W" else calculated
+        matches_target = (
+            result_min <= measured <= result_max
+            if result_min is not None and result_max is not None
+            else isclose(measured, target, rel_tol=1e-6, abs_tol=1e-6)
+        )
+        if not matches_target:
             raise ValueError(
-                f"resultado ({target:g} Ω) no coincide con el circuito correcto "
-                f"({calculated:g} Ω)"
+                f"resultado ({target:g} {result_unit}) no coincide con el circuito correcto "
+                f"({measured:g} {result_unit})"
             )
         identifier = str(row.get("id", "")).strip()
-        return Challenge(difficulty, mode, prompt, target, circuit_rows, identifier, voltage)
+        return Challenge(
+            difficulty, mode, prompt, target, circuit_rows, identifier, voltage,
+            result_unit=result_unit, result_min=result_min, result_max=result_max,
+        )
     except (ValueError, TypeError, OverflowError) as error:
         raise ValueError(f"{path.name}: {error}") from error
 
 
-def _load_challenge_file(path: Path) -> Challenge:
+def loadChallengeFile(path: Path) -> Challenge:
     """Lee y valida un reto CSV con pares de columnas `tipo_X` y `valor_X`.
 
     Los marcadores de fila se escriben en `tipo_X` y dejan vacío su `valor_X`.
@@ -240,15 +289,15 @@ def _load_challenge_file(path: Path) -> Challenge:
     separadores para las columnas que no usan.
     """
     frame = pd.read_csv(path, encoding="utf-8-sig", dtype=str, keep_default_na=False)
-    type_columns, value_columns, pair_numbers = _challenge_columns(frame)
+    type_columns, value_columns, pair_numbers = challengeColumns(frame)
     if len(frame) != 1:
         raise ValueError("Cada archivo debe contener exactamente un reto.")
-    return _parse_challenge_row(
+    return parseChallengeRow(
         frame.iloc[0], type_columns, value_columns, pair_numbers, path
     )
 
 
-def load_challenges(path: str | Path) -> list[Challenge]:
+def loadChallenges(path: str | Path) -> list[Challenge]:
     """Carga retos de CSV independientes o de un CSV unificado con columna `id`."""
     source = Path(path)
     if source.is_dir():
@@ -260,7 +309,7 @@ def load_challenges(path: str | Path) -> list[Challenge]:
     challenges = []
     for csv_path in files:
         frame = pd.read_csv(csv_path, encoding="utf-8-sig", dtype=str, keep_default_na=False)
-        type_columns, value_columns, pair_numbers = _challenge_columns(frame)
+        type_columns, value_columns, pair_numbers = challengeColumns(frame)
         if "id" in frame.columns:
             if frame.columns[0] != "id":
                 raise ValueError(f"{csv_path.name}: la primera columna debe ser 'id'.")
@@ -271,13 +320,13 @@ def load_challenges(path: str | Path) -> list[Challenge]:
                     or identifiers.duplicated().any()):
                 raise ValueError(f"{csv_path.name}: cada reto debe tener un id numérico único y no vacío.")
             challenges.extend(
-                _parse_challenge_row(row, type_columns, value_columns, pair_numbers, csv_path)
+                parseChallengeRow(row, type_columns, value_columns, pair_numbers, csv_path)
                 for _, row in frame.iterrows()
             )
         else:
             if len(frame) != 1:
                 raise ValueError(f"{csv_path.name}: cada archivo de import debe contener un único reto.")
-            challenges.append(_parse_challenge_row(
+            challenges.append(parseChallengeRow(
                 frame.iloc[0], type_columns, value_columns, pair_numbers, csv_path
             ))
     return sorted(
@@ -289,7 +338,7 @@ def load_challenges(path: str | Path) -> list[Challenge]:
     )
 
 
-def prepare_exercises(import_path: str | Path, exercises_path: str | Path) -> Path:
+def prepareExercises(import_path: str | Path, exercises_path: str | Path) -> Path:
     """Importa CSV individuales al archivo unificado y elimina el origen al confirmar."""
     import_dir = Path(import_path)
     files = sorted(import_dir.glob("*.csv"))
@@ -304,9 +353,9 @@ def prepare_exercises(import_path: str | Path, exercises_path: str | Path) -> Pa
             raise ValueError(f"{destination.name}: no contiene retos.")
         if "id" not in destination_frame.columns or destination_frame.columns[0] != "id":
             raise ValueError(f"{destination.name}: la primera columna debe ser 'id'.")
-        type_columns, value_columns, pair_numbers = _challenge_columns(destination_frame)
+        type_columns, value_columns, pair_numbers = challengeColumns(destination_frame)
         for _, row in destination_frame.iterrows():
-            _parse_challenge_row(
+            parseChallengeRow(
                 row, type_columns, value_columns, pair_numbers, destination
             )
         ids = destination_frame["id"].str.strip()
@@ -329,12 +378,12 @@ def prepare_exercises(import_path: str | Path, exercises_path: str | Path) -> Pa
     if not files:
         if destination.exists():
             if rewrite_existing:
-                _write_unified_exercises(destination, destination_frame)
+                writeUnifiedExercises(destination, destination_frame)
             return destination
         raise ValueError(f"No hay retos en {import_dir} ni un archivo existente en {destination}.")
 
     for source in files:
-        _load_challenge_file(source)
+        loadChallengeFile(source)
         frame = pd.read_csv(source, encoding="utf-8-sig", dtype=str, keep_default_na=False)
         if "id" in frame.columns:
             raise ValueError(f"{source.name}: los archivos de import no deben incluir columna 'id'.")
@@ -352,7 +401,8 @@ def prepare_exercises(import_path: str | Path, exercises_path: str | Path) -> Pa
 
         columns = [
             "id", "modo", "dificultad", "enunciado", "resultado",
-            "tension_v", "tipo_ejercicio",
+            "tension_v", "tipo_ejercicio", "unidad_resultado",
+            "resultado_min", "resultado_max",
         ]
         for number in range(1, max_pair + 1):
             columns.extend((f"tipo_{number}", f"valor_{number}"))
@@ -364,26 +414,26 @@ def prepare_exercises(import_path: str | Path, exercises_path: str | Path) -> Pa
         unified = pd.concat([destination_frame, frame], ignore_index=True).reindex(
             columns=columns, fill_value=""
         )
-        _write_unified_exercises(destination, unified)
+        writeUnifiedExercises(destination, unified)
         destination_frame = unified
         source.unlink()
 
     return destination
 
 
-def _write_unified_exercises(destination: Path, frame: pd.DataFrame) -> None:
+def writeUnifiedExercises(destination: Path, frame: pd.DataFrame) -> None:
     """Valida y reemplaza atómicamente el CSV unificado."""
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_suffix(".tmp")
     try:
         frame.to_csv(temporary, index=False, encoding="utf-8-sig")
-        load_challenges(temporary)
+        loadChallenges(temporary)
         temporary.replace(destination)
     finally:
         temporary.unlink(missing_ok=True)
 
 
-def save_simulation(path: str | Path, result: Simulation, challenge: Challenge,
+def saveSimulation(path: str | Path, result: Simulation, challenge: Challenge,
                     rows: list[list[float]]) -> None:
     """Exporta el circuito seleccionado y su resultado calculado."""
     path = Path(path)
@@ -405,6 +455,7 @@ class ProgressStore:
     """Historial de misiones resueltas, con guardado atómico y sin duplicados."""
 
     def __init__(self, path: str | Path):
+        """Carga el historial existente desde la ruta indicada."""
         self.path = Path(path)
         self.records = []
         if self.path.exists():
@@ -416,6 +467,7 @@ class ProgressStore:
             self.records = frame[PROGRESS_COLUMNS].to_dict("records")
 
     def append(self, record: dict) -> None:
+        """Añade un intento válido mediante una escritura atómica."""
         if any(row["partida_id"] == record["partida_id"] for row in self.records):
             return
         rows = [*self.records, record]

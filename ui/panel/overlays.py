@@ -1,7 +1,7 @@
 """Inventario de componentes y pantalla de misión completada."""
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QPainter
-from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QGridLayout, QVBoxLayout, QPushButton, QWidget
 
 from ui.shared.motion import WidgetMotion
 from ui.shared.session import CATALOG
@@ -14,13 +14,13 @@ class ComponentMenu(QFrame):
     chosen = Signal(str, float)
 
     def __init__(self, parent):
+        """Prepara el menú flotante con los valores disponibles."""
         super().__init__(parent)
         self.setStyleSheet("""
             QFrame#componentMenu { background: #ffffff; border: 3px solid #7252ba; border-bottom: 7px solid #7252ba; border-radius: 18px; }
             QLabel#section { font-size: 20px; font-weight: 700; }
             QPushButton#preset { padding: 11px 7px; font-size: 12px; }
             QPushButton#preset:checked { background: #d6f2dc; border-color: #21806b; color: #216853; }
-            QPushButton#closeMenu { padding: 2px 8px; border: none; background: transparent; color: #746985; }
         """)
         self.setObjectName("componentMenu")
         self.setFixedWidth(302)
@@ -28,15 +28,6 @@ class ComponentMenu(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 12, 14, 14)
         layout.setSpacing(9)
-        top = QHBoxLayout()
-        self.title = label("", "section")
-        top.addWidget(self.title, 1)
-        close = QPushButton("×")
-        close.setObjectName("closeMenu")
-        close.setAccessibleName("Cerrar inventario")
-        close.clicked.connect(self.dismiss)
-        top.addWidget(close)
-        layout.addLayout(top)
         grid = QGridLayout()
         grid.setSpacing(7)
         self.buttons = []
@@ -51,11 +42,10 @@ class ComponentMenu(QFrame):
         self.motion = WidgetMotion(self)
         self.hide()
 
-    def open_above(self, component_id, current, anchor, kind="R"):
+    def openAbove(self, component_id, current, anchor, kind="R"):
+        """Posiciona el menú sobre la pieza y resalta el valor actual."""
         self.component_id, self.values = component_id, CATALOG[kind]
         unit = "W" if kind == "B" else "Ω"
-        name = "Bombilla" if kind == "B" else "Resistencia"
-        self.title.setText(f"{component_id} · {name}")
         for index, button in enumerate(self.buttons):
             if index >= len(self.values):
                 button.hide()
@@ -71,14 +61,17 @@ class ComponentMenu(QFrame):
         self.motion.reveal()
 
     def dismiss(self):
+        """Cierra el menú con su animación de salida."""
         self.motion.dismiss()
 
     def hide(self):
+        """Oculta el menú y cancela cualquier animación activa."""
         if hasattr(self, "motion"):
             self.motion.reset()
         super().hide()
 
     def choose(self, value):
+        """Notifica la selección realizada y cierra el menú."""
         self.dismiss()
         self.chosen.emit(self.component_id, float(value))
 
@@ -89,6 +82,7 @@ class VictoryOverlay(QWidget):
     next_level = Signal()
 
     def __init__(self, parent):
+        """Construye el resumen de victoria y las acciones para continuar."""
         super().__init__(parent)
         self.setStyleSheet("""
             QFrame#victory { background: #fff9ed; border: 3px solid #7252ba; border-bottom: 9px solid #7252ba; border-radius: 28px; }
@@ -121,7 +115,8 @@ class VictoryOverlay(QWidget):
         self.motion = WidgetMotion(self)
         self.hide()
 
-    def show_record(self, record, session_complete=False, session_error=""):
+    def showRecord(self, record, session_complete=False, session_error=""):
+        """Muestra las métricas del nivel y el estado de la sesión."""
         if self.isVisible():
             self.motion.reset()
         changes = "cambio" if record["cambios_total"] == 1 else "cambios"
@@ -152,9 +147,11 @@ class VictoryOverlay(QWidget):
             self.motion.reveal(distance=22, duration=340, moving=self.box)
 
     def hide(self):
+        """Oculta la superposición y restaura su efecto visual."""
         if hasattr(self, "motion"):
             self.motion.reset()
         super().hide()
 
     def paintEvent(self, _event):
+        """Dibuja el velo translúcido detrás del resumen de victoria."""
         QPainter(self).fillRect(self.rect(), QColor(244, 235, 255, 225))

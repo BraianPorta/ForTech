@@ -1,7 +1,9 @@
 """Colores del tema y estilos globales de la aplicación."""
+# Paleta base para fondos, texto, bordes y estados destacados.
 BG, PANEL, EDGE = "#fff9ed", "#ffffff", "#dcd4e9"
 TEXT, MUTED, TEAL, ORANGE = "#392d57", "#746985", "#21806b", "#a35b16"
 
+# Reglas visuales compartidas por todos los widgets de la aplicación.
 APPLICATION_STYLE = f"""
 QWidget {{ color: {TEXT}; font-family: 'DejaVu Sans'; font-size: 13px; }}
 QMainWindow, QDialog {{ background: {BG}; }}

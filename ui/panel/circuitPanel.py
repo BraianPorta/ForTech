@@ -2,11 +2,12 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout
 
-from ui.panel.game_footer import GameFooter
-from ui.panel.flow_exercise import FlowExercisePanel
-from ui.panel.game_widgets import CircuitView, DeviceIllustration
+from ui.panel.gameFooter import GameFooter
+from ui.panel.flowExercise import FlowExercisePanel
+from ui.panel.gameWidgets import CircuitView, DeviceIllustration
 from ui.shared.widgets import label
 
+# Colores y superficies propios del escenario de juego.
 CIRCUIT_STYLE = """
 QFrame#playfield { background: #f1ecff; border: 2px solid #c7b7e4; border-bottom: 7px solid #c7b7e4; border-radius: 30px; }
 QFrame#deviceDock { background: transparent; border: none; }
@@ -16,7 +17,10 @@ QLabel#hint { color: #6042a6; font-size: 12px; font-weight: 700; }
 
 
 class CircuitPanel(QFrame):
+    """Agrupa el circuito, el panel de fluidos, el personaje y los controles."""
+
     def __init__(self, parent=None):
+        """Construye las áreas principales del escenario de juego."""
         super().__init__(parent)
         self.setStyleSheet(CIRCUIT_STYLE)
         self.setObjectName("playfield")
@@ -34,8 +38,8 @@ class CircuitPanel(QFrame):
 
         arena = QHBoxLayout()
         arena.setSpacing(0)
-        self.flow_exercise = FlowExercisePanel()
-        arena.addWidget(self.flow_exercise, 1)
+        self.flowExercise = FlowExercisePanel()
+        arena.addWidget(self.flowExercise, 1)
         self.circuit = CircuitView()
         arena.addWidget(self.circuit, 1)
         dock = QFrame()
@@ -58,9 +62,10 @@ class CircuitPanel(QFrame):
 
         self.footer = GameFooter()
         layout.addWidget(self.footer)
-        self.show_flow_exercise(False)
+        self.showFlowExercise(False)
 
-    def show_flow_exercise(self, visible: bool):
-        self.flow_exercise.setVisible(visible)
+    def showFlowExercise(self, visible: bool):
+        """Muestra el panel de fluidos o el circuito eléctrico correspondiente."""
+        self.flowExercise.setVisible(visible)
         self.circuit.setVisible(not visible)
         self.device_dock.setVisible(not visible)

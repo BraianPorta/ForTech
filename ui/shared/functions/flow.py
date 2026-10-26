@@ -4,8 +4,14 @@ from math import isfinite, log10, pi, sqrt
 from typing import Mapping
 
 
+# ---------------------------------------------------------------
+# MECÁNICA DE FLUIDOS
+# ---------------------------------------------------------------
+
 @dataclass(frozen=True)
 class FlowParameter:
+    """Opción seleccionable de un parámetro de un ejercicio de fluidos."""
+
     key: str
     label: str
     options: tuple[float, ...]
@@ -15,6 +21,8 @@ class FlowParameter:
 
 @dataclass(frozen=True)
 class FlowExercise:
+    """Enunciado, modelo físico y presentación de un ejercicio de fluidos."""
+
     title: str
     prompt: str
     objective: str
@@ -25,6 +33,7 @@ class FlowExercise:
     unit: str
 
 
+# Definiciones disponibles de ejercicios, parámetros y sus criterios de éxito.
 FLOW_EXERCISES = {
     "laminar_flow": FlowExercise(
         title="Régimen de flujo",
@@ -97,11 +106,12 @@ FLOW_EXERCISES = {
 }
 
 
-def is_flow_exercise(exercise_type: str) -> bool:
+def isFlowExercise(exercise_type: str) -> bool:
+    """Indica si el identificador corresponde a un ejercicio de fluidos."""
     return exercise_type in FLOW_EXERCISES
 
 
-def calculate_flow_result(exercise_type: str, values: Mapping[str, float]) -> float:
+def calculateFlowResult(exercise_type: str, values: Mapping[str, float]) -> float:
     """Calcula Reynolds, calor disipado o pérdida de presión según el ejercicio."""
     if exercise_type not in FLOW_EXERCISES:
         raise ValueError(f"Tipo de ejercicio de fluidos no admitido: {exercise_type!r}")
@@ -149,11 +159,11 @@ def calculate_flow_result(exercise_type: str, values: Mapping[str, float]) -> fl
     return density * 9.81 * head_loss / 1000
 
 
-def simulate_flow(exercise_type: str, values: Mapping[str, float]):
+def simulateFlow(exercise_type: str, values: Mapping[str, float]):
     """Devuelve el resultado calculado y si satisface el criterio del reto."""
-    from ui.shared.functions import Simulation
+    from ui.shared.functions.electronic import Simulation
 
-    result = calculate_flow_result(exercise_type, values)
+    result = calculateFlowResult(exercise_type, values)
     if exercise_type == "laminar_flow":
         passed = result < 2300
         target = 2300.0

@@ -9,6 +9,7 @@ class WidgetMotion(QObject):
     """Fundido y desplazamiento coordinados, con interrupción segura."""
 
     def __init__(self, widget):
+        """Prepara el efecto de opacidad para animar el widget indicado."""
         super().__init__(widget)
         self.widget, self.group = widget, None
         self.effect = QGraphicsOpacityEffect(widget)
@@ -16,6 +17,7 @@ class WidgetMotion(QObject):
         widget.setGraphicsEffect(self.effect)
 
     def reset(self):
+        """Detiene una animación y restaura el estado visible e interactivo."""
         if self.group is not None:
             self.group.stop()
             self.group.deleteLater()
@@ -24,6 +26,7 @@ class WidgetMotion(QObject):
         self.widget.setEnabled(True)
 
     def reveal(self, distance=10, duration=220, moving=None):
+        """Muestra el widget con fundido y desplazamiento opcional."""
         self.reset()
         target = self.widget if moving is None else moving
         destination = target.pos()
@@ -48,6 +51,7 @@ class WidgetMotion(QObject):
         group.start()
 
     def dismiss(self, on_finished=None):
+        """Desvanece y oculta el widget tras finalizar la animación."""
         if not self.widget.isVisible() or not self.widget.isEnabled():
             return
         opacity = self.effect.opacity()
@@ -69,20 +73,24 @@ class SceneTransition(QWidget):
     """Cubre la escena, cambia de misión y la revela con un fundido suave."""
 
     def __init__(self, parent):
+        """Inicializa la capa translúcida que cubre la escena."""
         super().__init__(parent)
         self._shade, self.group = 0.0, None
         self.hide()
 
-    def get_shade(self):
+    def getShade(self):
+        """Devuelve la opacidad actual de la capa de transición."""
         return self._shade
 
-    def set_shade(self, value):
+    def setShade(self, value):
+        """Actualiza la opacidad de la capa y solicita un repintado."""
         self._shade = value
         self.update()
 
-    shade = Property(float, get_shade, set_shade)
+    shade = Property(float, getShade, setShade)
 
     def play(self, change=None):
+        """Cubre la escena, ejecuta el cambio y revela el nuevo contenido."""
         if self.group is not None:
             self.group.stop()
             self.group.deleteLater()
@@ -109,5 +117,6 @@ class SceneTransition(QWidget):
         group.start()
 
     def paintEvent(self, _event):
+        """Dibuja la capa de transición con la opacidad actual."""
         painter = QPainter(self)
         painter.fillRect(self.rect(), QColor(255, 249, 237, int(255 * self._shade)))

@@ -6,10 +6,13 @@ from ui.shared.widgets import label
 
 
 class StartScreen(QWidget):
+    """Permite elegir una aventura y consultar su disponibilidad."""
+
     character_selected = Signal(str)
     statistics_requested = Signal()
 
     def __init__(self, parent=None):
+        """Crea las tarjetas de personajes y el acceso a estadísticas."""
         super().__init__(parent)
         self.setStyleSheet("""
             QWidget#startScreen { background: #fff9ed; }
@@ -33,7 +36,7 @@ class StartScreen(QWidget):
         brand = label("FORTECH", "brand")
         brand.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(brand)
-        title = label("¿Ready", "title")
+        title = label("¿Ready?", "title")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
         subtitle = label("Elige una aventura para continuar.", "subtitle")
@@ -44,14 +47,14 @@ class StartScreen(QWidget):
         cards = QHBoxLayout()
         cards.setSpacing(24)
         cards.addStretch(1)
-        self.leire_card, self.leire_button = self._make_card(
+        self.leire_card, self.leire_button = self.makeCard(
             "Leire",
             "Retos de circuitos eléctricos",
             "JUGAR",
             lambda: self.character_selected.emit("leire"),
         )
         cards.addWidget(self.leire_card)
-        self.unai_card, self.unai_button = self._make_card(
+        self.unai_card, self.unai_button = self.makeCard(
             "Unai",
             "Su aventura todavía se está preparando.",
             "PRÓXIMAMENTE",
@@ -59,14 +62,16 @@ class StartScreen(QWidget):
             available=False,
         )
         self.unai_detail = self.unai_card.findChild(QLabel, "characterDetail")
+        self.unai_portrait = self.unai_card.findChild(QLabel, "characterPortrait")
         cards.addWidget(self.unai_card)
-        self.braian_card, self.braian_button = self._make_card(
+        self.braian_card, self.braian_button = self.makeCard(
             "Braian",
             "Su aventura todavía se está preparando.",
             "PRÓXIMAMENTE",
             None,
             available=False,
         )
+        self.completed_modes = set()
         cards.addWidget(self.braian_card)
         cards.addStretch(1)
         layout.addLayout(cards)
@@ -79,10 +84,11 @@ class StartScreen(QWidget):
         footer.addWidget(self.statistics_button)
         layout.addLayout(footer)
 
-    def set_available_modes(self, modes):
+    def setAvailableModes(self, modes):
+        """Actualiza disponibilidad y estado visual de las aventuras."""
         self.leire_button.setEnabled(0 in modes)
         self.unai_button.setEnabled(1 in modes)
-        self.unai_button.setText("JUGAR" if 1 in modes else "PRÓXIMAMENTE")
+        self.updateActionLabels(modes)
         self.unai_card.setObjectName("characterCard" if 1 in modes else "unavailableCard")
         self.unai_card.style().unpolish(self.unai_card)
         self.unai_card.style().polish(self.unai_card)
@@ -92,21 +98,43 @@ class StartScreen(QWidget):
                 else "Su aventura todavía se está preparando."
             )
 
+    def markCompleted(self, mode):
+        """Marca una aventura como completada sin impedir volver a jugarla."""
+        self.completed_modes.add(mode)
+        self.updateActionLabels({
+            current_mode
+            for current_mode, button in ((0, self.leire_button), (1, self.unai_button))
+            if button.isEnabled()
+        })
+
+    def updateActionLabels(self, available_modes):
+        """Sincroniza las etiquetas de acción con disponibilidad y progreso."""
+        for mode, button in ((0, self.leire_button), (1, self.unai_button)):
+            if mode not in available_modes:
+                button.setText("PRÓXIMAMENTE")
+            else:
+                button.setText(
+                    "✓ COMPLETADO" if mode in self.completed_modes else "JUGAR"
+                )
+
     @staticmethod
-    def _make_card(name, detail, action_text, action, available=True):
+    def makeCard(name, detail, action_text, action, available=True):
+        """Crea una tarjeta de personaje y devuelve la tarjeta y su botón."""
         card = QFrame()
         card.setObjectName("characterCard" if available else "unavailableCard")
         card.setFixedSize(330, 290)
         layout = QVBoxLayout(card)
         layout.setContentsMargins(28, 26, 28, 24)
         layout.setSpacing(14)
-        portrait = label(name[0], "characterName")
+        portrait = label(name[0], "characterPortrait")
         portrait.setAlignment(Qt.AlignmentFlag.AlignCenter)
         portrait.setFixedSize(84, 84)
         portrait.setStyleSheet(
-            "background: #eee6ff; color: #6042a6; border-radius: 42px;"
+            "background: #c8f1e2; color: #287966; border-radius: 42px; font-weight: 700;"
+            if name == "Unai" else
+            "background: #eee6ff; color: #6042a6; border-radius: 42px; font-weight: 700;"
             if available else
-            "background: #e7e1ec; color: #8d8497; border-radius: 42px;"
+            "background: #e7e1ec; color: #8d8497; border-radius: 42px; font-weight: 700;"
         )
         layout.addWidget(portrait, alignment=Qt.AlignmentFlag.AlignHCenter)
         name_label = label(name, "characterName")

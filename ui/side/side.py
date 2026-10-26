@@ -1,20 +1,23 @@
-"""Panel con el objetivo, descripción y datos de la misión actual."""
+"""Panel lateral con el objetivo, el enunciado y los datos de la misión."""
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QVBoxLayout
 
 from ui.shared.widgets import label
 
+# Estilos del panel lateral de misión y sus objetivos.
 MISSION_STYLE = """
 QFrame#mission { background: #ffffff; border: 2px solid #e0d7ee; border-bottom: 6px solid #e0d7ee; border-radius: 24px; }
 QLabel#hero { font-size: 30px; font-weight: 700; }
 QLabel#gold { color: #392d57; font-size: 29px; font-weight: 700; }
-QLabel#hint { color: #6042a6; font-size: 12px; font-weight: 700; }
 QLabel#levelBadge { background: #7252ba; color: white; border-radius: 18px; padding: 14px; font-size: 20px; font-weight: 700; }
 """
 
 
 class MissionPanel(QFrame):
+    """Presenta el título de la misión, el enunciado y su objetivo."""
+
     def __init__(self, parent=None):
+        """Construye el panel lateral con etiquetas de misión y objetivo."""
         super().__init__(parent)
         self.setStyleSheet(MISSION_STYLE)
         self.setObjectName("mission")
@@ -36,6 +39,3 @@ class MissionPanel(QFrame):
         layout.addWidget(self.target_label)
         self.tolerance_label = label("", "muted", True)
         layout.addWidget(self.tolerance_label)
-        layout.addStretch(1)
-        self.description = label("Toca R1 o C1\npara cambiar una pieza.", "hint", True)
-        layout.addWidget(self.description)

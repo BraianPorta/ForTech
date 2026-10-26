@@ -7,10 +7,13 @@ from ui.shared.widgets import label
 
 
 class PauseMenu(QWidget):
+    """Superposición de pausa con acciones para reanudar o volver al inicio."""
+
     resume_requested = Signal()
     home_requested = Signal()
 
     def __init__(self, parent=None):
+        """Construye la tarjeta modal y conecta sus acciones."""
         super().__init__(parent)
         self.setStyleSheet("""
             QFrame#menuCard { background: #fff9ed; border: 3px solid #7252ba; border-bottom: 8px solid #7252ba; border-radius: 26px; }
@@ -42,6 +45,7 @@ class PauseMenu(QWidget):
         self.hide()
 
     def showEvent(self, event):
+        """Centra la tarjeta y enfoca el botón de reanudación al abrir."""
         super().showEvent(event)
         self.setGeometry(self.parentWidget().rect())
         self.card.adjustSize()
@@ -53,5 +57,6 @@ class PauseMenu(QWidget):
         self.resume_button.setFocus(Qt.FocusReason.PopupFocusReason)
 
     def paintEvent(self, _event):
+        """Oscurece el fondo de la partida mientras el menú está abierto."""
         painter = QPainter(self)
         painter.fillRect(self.rect(), QColor(38, 29, 57))

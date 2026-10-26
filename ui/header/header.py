@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QPushButton, QVBoxLayout, QWi
 from ui.shared.style import TEXT
 from ui.shared.widgets import label
 
+# Estilos tipográficos y de superficie de la cabecera y sus métricas.
 HEADER_STYLE = f"""
 QLabel#title {{ color: #6042a6; font-size: 28px; font-weight: 700; letter-spacing: -1px; }}
 QLabel#levelBadge {{ background: #7252ba; color: white; border-radius: 18px; padding: 14px; font-size: 20px; font-weight: 700; }}
@@ -14,7 +15,10 @@ QFrame#hud {{ background: #ffffff; border: 2px solid #e0d7ee; border-bottom: 5px
 
 
 class GameHeader(QWidget):
+    """Muestra la marca, métricas de partida y acceso al menú."""
+
     def __init__(self, parent=None):
+        """Construye la cabecera con sus indicadores y botón de menú."""
         super().__init__(parent)
         self.setStyleSheet(HEADER_STYLE)
         top = QHBoxLayout(self)
